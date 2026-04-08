@@ -12,16 +12,30 @@ L'onglet **Recherche RAG** offre une interface dédiée pour la recherche vector
 
 Les résultats sont classés par similarité cosinus entre l'embedding de la requête et chaque chunk indexé.
 
-## Filtre par mots-clés
+## Filtre par mot-clé
 
-Après une recherche sémantique, utilisez le champ de filtre par mots-clés en haut de la liste des résultats pour affiner les résultats.
+Après une recherche sémantique, utilisez le filtre par mot-clé en haut de la liste des résultats pour affiner les résultats. Plusieurs champs de filtre peuvent être combinés pour un filtrage précis.
 
-![Filtre par mots-clés](images/rag-search-keyword.png)
+![Filtre par mot-clé](images/rag-search-keyword.png)
 
-- Termes séparés par des espaces — tous les termes doivent correspondre (logique ET)
-- La correspondance s'applique au texte du chunk et au chemin du fichier
-- La case « Tout sélectionner » et le compteur reflètent la vue filtrée
-- Effacez le filtre pour afficher à nouveau tous les résultats
+- **Dans un champ** — Les termes séparés par des espaces utilisent la logique **OU** (tout terme correspond)
+- **Entre les champs** — Plusieurs champs utilisent la logique **ET** (tous les champs doivent correspondre)
+- Cliquez sur le bouton **+ ET** pour ajouter un champ de filtre
+- Cliquez sur **✕** pour supprimer un champ de filtre
+- Recherche dans le texte du fragment et le chemin du fichier
+- La case "Tout sélectionner" et le compteur reflètent la vue filtrée
+- Effacez tous les filtres pour revoir tous les résultats
+
+### Suggestion de mots-clés par IA
+
+Chaque champ de filtre dispose d'un bouton **✦** qui utilise l'IA pour enrichir vos mots-clés avec des synonymes et termes associés.
+
+- Saisissez des mots-clés puis cliquez sur ✦
+- Le **Modèle d'affinage IA** configuré génère des termes associés et remplace le contenu du champ
+- Cliquez sur le bouton **↩** (annuler) pour restaurer les mots-clés originaux
+- Nécessite la sélection d'un modèle dans **Modèle d'affinage IA** (icône engrenage des paramètres de recherche)
+
+Utile pour capturer les variations terminologiques que la similarité d'embedding aurait pu manquer, tout en filtrant les résultats déjà récupérés.
 
 ## Sélection des résultats
 
@@ -107,7 +121,7 @@ Cliquez sur l'icône engrenage dans la barre de recherche pour ouvrir la configu
 | **Paramètres** | Utilise les valeurs par défaut du paramètre RAG | Ajustable à chaque recherche (Top K, seuil) |
 | **Sélection des résultats** | Tous les résultats inclus automatiquement | L'utilisateur choisit les résultats à inclure |
 | **Chunks adjacents** | Non disponible | Charger les chunks précédent/suivant dans l'éditeur |
-| **Filtre par mots-clés** | Non disponible | Filtrer les résultats avant la sélection |
+| **Filtre par mot-clé** | Non disponible | Filtrer les résultats avant la sélection |
 | **Affinement IA** | Non disponible | Extension automatique des chunks et affinement avec LLM |
 
 Le flux de recherche offre un contrôle plus fin sur le contexte envoyé au LLM. Le menu déroulant RAG du Chat est un raccourci pratique pour l'injection de contexte entièrement automatique.

@@ -1,6 +1,6 @@
 # RAG-Suche
 
-Der Tab **RAG-Suche** bietet eine dedizierte Oberfläche für semantische Vektorsuche, Schlüsselwortfilterung, Chunk-Bearbeitung und das Senden von Ergebnissen an Chat oder Discussion.
+Der Tab **RAG-Suche** bietet eine dedizierte Oberfläche für semantische Vektorsuche, Stichwortfilterung, Chunk-Bearbeitung und das Senden von Ergebnissen an Chat oder Discussion.
 
 ![RAG-Suche](images/rag-search.png)
 
@@ -12,16 +12,30 @@ Der Tab **RAG-Suche** bietet eine dedizierte Oberfläche für semantische Vektor
 
 Die Ergebnisse werden nach der Kosinus-Ähnlichkeit zwischen dem Abfrage-Embedding und jedem indizierten Chunk sortiert.
 
-## Schlüsselwortfilter
+## Stichwortfilter
 
-Nach einer semantischen Suche können Sie das Schlüsselwort-Filterfeld oben in der Ergebnisliste verwenden, um die Ergebnisse nach Schlüsselwörtern einzugrenzen.
+Nach einer semantischen Suche können Sie den Stichwortfilter oben in der Ergebnisliste verwenden, um Ergebnisse einzugrenzen. Mehrere Filterfelder können für präzises Filtern kombiniert werden.
 
-![Schlüsselwortfilter](images/rag-search-keyword.png)
+![Stichwortfilter](images/rag-search-keyword.png)
 
-- Durch Leerzeichen getrennte Begriffe — alle Begriffe müssen übereinstimmen (UND-Logik)
-- Abgleich erfolgt sowohl im Chunk-Text als auch im Dateipfad
-- Das Kontrollkästchen „Alle auswählen" und die Anzahl beziehen sich auf die gefilterte Ansicht
-- Löschen Sie den Filter, um wieder alle Ergebnisse anzuzeigen
+- **Innerhalb eines Feldes** — Leerzeichen-getrennte Begriffe verwenden **ODER**-Logik (ein beliebiger Begriff muss übereinstimmen)
+- **Zwischen Feldern** — Mehrere Felder verwenden **UND**-Logik (alle Felder müssen übereinstimmen)
+- Klicken Sie auf **+ UND**, um ein Filterfeld hinzuzufügen
+- Klicken Sie auf **✕**, um ein Filterfeld zu entfernen
+- Durchsucht sowohl Chunk-Text als auch Dateipfad
+- Das Kontrollkästchen "Alle auswählen" und die Anzahl spiegeln die gefilterte Ansicht wider
+- Löschen Sie alle Filter, um alle Ergebnisse wieder anzuzeigen
+
+### KI-Stichwortvorschlag
+
+Jedes Filterfeld hat einen **✦**-Button, der KI nutzt, um Ihre Stichwörter mit Synonymen und verwandten Begriffen zu erweitern.
+
+- Geben Sie Stichwörter ein und klicken Sie auf ✦
+- Das konfigurierte **KI-Verfeinerungsmodell** generiert verwandte Begriffe und ersetzt den Feldinhalt
+- Klicken Sie auf **↩** (Rückgängig), um die ursprünglichen Stichwörter wiederherzustellen
+- Erfordert die Auswahl eines Modells unter **KI-Verfeinerungsmodell** (Zahnrad-Symbol der Sucheinstellungen)
+
+Nützlich, um Terminologievarianten zu erfassen, die die Embedding-Ähnlichkeitssuche möglicherweise übersehen hat.
 
 ## Ergebnisse auswählen
 
@@ -107,7 +121,7 @@ Klicken Sie auf das Zahnradsymbol in der Suchleiste, um die Inline-Indexkonfigur
 | **Parameter** | Verwendet RAG-Einstellungsstandards | Pro Suche anpassbar (Top K, Schwellenwert) |
 | **Ergebnisauswahl** | Alle Ergebnisse automatisch eingeschlossen | Benutzer wählt die einzuschließenden Ergebnisse |
 | **Benachbarte Chunks** | Nicht verfügbar | Vorherigen/nächsten Chunk im Editor laden |
-| **Schlüsselwortfilter** | Nicht verfügbar | Ergebnisse vor der Auswahl filtern |
+| **Stichwortfilter** | Nicht verfügbar | Ergebnisse vor der Auswahl filtern |
 | **KI-Verfeinerung** | Nicht verfügbar | Chunks automatisch erweitern und mit LLM verfeinern |
 
 Der Such-Ablauf bietet mehr Kontrolle darüber, welcher Kontext an das LLM gesendet wird. Das RAG-Dropdown im Chat ist eine praktische Abkürzung für die vollautomatische Kontexteinspeisung.

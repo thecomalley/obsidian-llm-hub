@@ -12,16 +12,30 @@ A aba **Pesquisa RAG** oferece uma interface dedicada para pesquisa vetorial sem
 
 Os resultados são classificados pela similaridade cosseno entre o embedding da consulta e cada chunk indexado.
 
-## Filtro por palavras-chave
+## Filtro por palavra-chave
 
-Após uma pesquisa semântica, use o campo de filtro por palavras-chave no topo da lista de resultados para refinar os resultados.
+Após uma pesquisa semântica, use o filtro por palavra-chave no topo da lista de resultados para refinar os resultados. Múltiplos campos de filtro podem ser combinados para filtragem precisa.
 
-![Filtro por palavras-chave](images/rag-search-keyword.png)
+![Filtro por palavra-chave](images/rag-search-keyword.png)
 
-- Termos separados por espaço — todos os termos devem corresponder (lógica AND)
-- A correspondência é feita tanto no texto do chunk quanto no caminho do arquivo
-- A caixa de seleção "Selecionar tudo" e o contador refletem a visualização filtrada
-- Limpe o filtro para ver todos os resultados novamente
+- **Dentro de um campo** — Termos separados por espaços usam lógica **OR** (qualquer termo corresponde)
+- **Entre campos** — Múltiplos campos usam lógica **AND** (todos os campos devem corresponder)
+- Clique no botão **+ E** para adicionar um campo de filtro
+- Clique em **✕** para remover um campo de filtro
+- Pesquisa tanto no texto do trecho quanto no caminho do arquivo
+- A caixa "Selecionar tudo" e a contagem refletem a visualização filtrada
+- Limpe todos os filtros para ver todos os resultados novamente
+
+### Sugestão de palavras-chave com IA
+
+Cada campo de filtro tem um botão **✦** que usa IA para expandir suas palavras-chave com sinônimos e termos relacionados.
+
+- Digite palavras-chave e clique em ✦
+- O **Modelo de refinamento IA** configurado gera termos relacionados e substitui o conteúdo do campo
+- Clique no botão **↩** (desfazer) para restaurar as palavras-chave originais
+- Requer a seleção de um modelo em **Modelo de refinamento IA** (ícone de engrenagem das configurações de pesquisa)
+
+Útil para capturar variações terminológicas que a busca por similaridade de embeddings pode ter perdido, enquanto filtra dentro dos resultados já recuperados.
 
 ## Seleção de resultados
 
@@ -107,7 +121,7 @@ Clique no ícone de engrenagem na barra de pesquisa para abrir a configuração 
 | **Parâmetros** | Usa os padrões da configuração RAG | Ajustável por pesquisa (Top K, limiar) |
 | **Seleção de resultados** | Todos os resultados incluídos automaticamente | O usuário seleciona quais resultados incluir |
 | **Chunks adjacentes** | Não disponível | Carregar chunks anterior/próximo no editor |
-| **Filtro por palavras-chave** | Não disponível | Filtrar resultados antes de selecionar |
+| **Filtro por palavra-chave** | Não disponível | Filtrar resultados antes de selecionar |
 | **Refinamento IA** | Não disponível | Expandir chunks automaticamente e refinar com LLM |
 
 O fluxo de pesquisa oferece mais controle sobre o contexto enviado ao LLM. O menu suspenso RAG do Chat é um atalho conveniente para injeção de contexto totalmente automática.
