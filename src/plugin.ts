@@ -809,8 +809,12 @@ export class LlmHubPlugin extends Plugin {
 
     try {
       const effectiveModel = ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL);
-      // Auto-enable multimodal indexing for Gemini native embedding models that support multimodal
-      const indexMultimodal = !ragSetting.embeddingBaseUrl && /gemini-embedding-/i.test(effectiveModel);
+      // Auto-enable multimodal indexing:
+      // - Gemini native embedding models: full multimodal (PDF binary, images, audio, video)
+      // - Non-Gemini (custom base URL): PDF only via text extraction
+      const indexMultimodal = !ragSetting.embeddingBaseUrl
+        ? /gemini-embedding-/i.test(effectiveModel)
+        : true;
       const result = await localRag.sync(
         this.app,
         ragSettingName,

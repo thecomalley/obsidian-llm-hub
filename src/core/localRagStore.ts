@@ -1,4 +1,4 @@
-import { type App, TFile } from "obsidian";
+import { type App, TFile, loadPdfJs } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
   generateEmbeddings,
@@ -167,6 +167,8 @@ class LocalRagStore {
     // Determine eligible file extensions
     const isEligibleFile = (f: TFile) => {
       if (f.extension === "md") return true;
+      // PDFs: Gemini native uses binary embedding; others use text extraction
+      if (indexMultimodal && f.extension === "pdf") return true;
       if (indexMultimodal && isGeminiNative && MULTIMODAL_EXTENSIONS.has(f.extension)) return true;
       return false;
     };
@@ -287,44 +289,74 @@ class LocalRagStore {
           result.embedded++;
           embeddedChecksums[file.path] = currentChecksums[file.path];
         } else if (file.extension === "pdf") {
-          // PDF: split into configurable page chunks for Gemini embedding limit
-          const sizeLimit = MULTIMODAL_FILE_SIZE_LIMITS[file.extension];
-          const stat = await app.vault.adapter.stat(file.path);
-          if (!stat || (sizeLimit && stat.size > sizeLimit)) {
-            result.errors.push(`${file.path}: file too large (${stat?.size ?? 0} bytes, limit ${sizeLimit ?? 0})`);
-            continue;
-          }
+          if (isGeminiNative) {
+            // Gemini native: embed PDF binary chunks directly
+            const sizeLimit = MULTIMODAL_FILE_SIZE_LIMITS[file.extension];
+            const stat = await app.vault.adapter.stat(file.path);
+            if (!stat || (sizeLimit && stat.size > sizeLimit)) {
+              result.errors.push(`${file.path}: file too large (${stat?.size ?? 0} bytes, limit ${sizeLimit ?? 0})`);
+              continue;
+            }
 
-          const buffer = await app.vault.readBinary(file);
-          const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-          const totalPages = pdfDoc.getPageCount();
-          const maxPages = normalizedPdfChunkPages;
-          let embedded = 0;
+            const buffer = await app.vault.readBinary(file);
+            const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+            const totalPages = pdfDoc.getPageCount();
+            const maxPages = normalizedPdfChunkPages;
+            let embedded = 0;
 
-          for (let start = 0; start < totalPages; start += maxPages) {
-            const end = Math.min(start + maxPages, totalPages);
-            const chunkDoc = await PDFDocument.create();
-            const pages = await chunkDoc.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
-            for (const page of pages) chunkDoc.addPage(page);
-            const chunkBytes = await chunkDoc.save();
-            const chunkBase64 = arrayBufferToBase64(chunkBytes.buffer as ArrayBuffer);
+            for (let start = 0; start < totalPages; start += maxPages) {
+              const end = Math.min(start + maxPages, totalPages);
+              const chunkDoc = await PDFDocument.create();
+              const pages = await chunkDoc.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
+              for (const page of pages) chunkDoc.addPage(page);
+              const chunkBytes = await chunkDoc.save();
+              const chunkBase64 = arrayBufferToBase64(chunkBytes.buffer as ArrayBuffer);
 
-            const embeddings = await generateGeminiNativeEmbeddings(
-              [{ inlineData: { mimeType: "application/pdf", data: chunkBase64 } }],
-              apiKey, model
+              const embeddings = await generateGeminiNativeEmbeddings(
+                [{ inlineData: { mimeType: "application/pdf", data: chunkBase64 } }],
+                apiKey, model
+              );
+
+              if (embeddings.length > 0 && embeddings[0].length > 0) {
+                dimension = embeddings[0].length;
+                const pageLabel = `pages ${start + 1}-${end} of ${totalPages}`;
+                const label = `[Pdf: ${file.name} (${pageLabel})]`;
+                newMeta.push({ filePath: file.path, chunkIndex: start, text: label, contentType: "pdf", pageLabel });
+                newVectorParts.push(new Float32Array(embeddings[0]));
+                embedded++;
+              }
+            }
+
+            if (embedded > 0) {
+              result.embedded++;
+              embeddedChecksums[file.path] = currentChecksums[file.path];
+            }
+          } else {
+            // Non-Gemini: extract text from PDF and embed as text chunks
+            const pdfResult = await extractPdfTextWithOffsets(app, file);
+            if (!pdfResult) continue;
+
+            const chunks = chunkTextWithOffsets(pdfResult.text, chunkSize, chunkOverlap);
+            if (chunks.length === 0) continue;
+
+            const embeddings = await generateEmbeddings(
+              chunks.map(c => c.text), apiKey, model, embeddingBaseUrl,
             );
 
             if (embeddings.length > 0 && embeddings[0].length > 0) {
               dimension = embeddings[0].length;
-              const pageLabel = `pages ${start + 1}-${end} of ${totalPages}`;
-              const label = `[Pdf: ${file.name} (${pageLabel})]`;
-              newMeta.push({ filePath: file.path, chunkIndex: start, text: label, contentType: "pdf", pageLabel });
-              newVectorParts.push(new Float32Array(embeddings[0]));
-              embedded++;
             }
-          }
 
-          if (embedded > 0) {
+            for (let i = 0; i < chunks.length; i++) {
+              if (embeddings[i] && embeddings[i].length > 0) {
+                const pageLabel = computePageLabel(
+                  chunks[i].startOffset, chunks[i].startOffset + chunks[i].text.length,
+                  pdfResult.pageOffsets, pdfResult.numPages,
+                );
+                newMeta.push({ filePath: file.path, chunkIndex: i, text: chunks[i].text, contentType: "pdf", pageLabel });
+                newVectorParts.push(new Float32Array(embeddings[i]));
+              }
+            }
             result.embedded++;
             embeddedChecksums[file.path] = currentChecksums[file.path];
           }
@@ -653,14 +685,15 @@ export function buildLocalRagContext(results: LocalRagSearchResult[]): string {
   return context;
 }
 
-// Chunking: split text into chunks with overlap at paragraph/sentence boundaries
-function chunkText(text: string, chunkSize: number, chunkOverlap: number): string[] {
+// Chunking: split text into chunks with overlap at paragraph/sentence boundaries.
+// Returns offset information for each chunk.
+function chunkTextWithOffsets(text: string, chunkSize: number, chunkOverlap: number): { text: string; startOffset: number }[] {
   if (!text.trim()) return [];
 
   // Clamp overlap to be less than chunk size to ensure forward progress
   const effectiveOverlap = Math.min(chunkOverlap, chunkSize - 1);
 
-  const chunks: string[] = [];
+  const chunks: { text: string; startOffset: number }[] = [];
   let start = 0;
 
   while (start < text.length) {
@@ -682,7 +715,7 @@ function chunkText(text: string, chunkSize: number, chunkOverlap: number): strin
 
     const chunk = text.slice(start, end).trim();
     if (chunk) {
-      chunks.push(chunk);
+      chunks.push({ text: chunk, startOffset: start });
     }
 
     const nextStart = end - effectiveOverlap;
@@ -694,6 +727,62 @@ function chunkText(text: string, chunkSize: number, chunkOverlap: number): strin
   }
 
   return chunks;
+}
+
+function chunkText(text: string, chunkSize: number, chunkOverlap: number): string[] {
+  return chunkTextWithOffsets(text, chunkSize, chunkOverlap).map(c => c.text);
+}
+
+interface PdfExtractResult {
+  text: string;
+  numPages: number;
+  /** Character offset where each page starts. */
+  pageOffsets: number[];
+}
+
+/** Extract text from a PDF with page offset tracking for page label computation. */
+async function extractPdfTextWithOffsets(app: App, file: TFile): Promise<PdfExtractResult | null> {
+  const buffer = await app.vault.readBinary(file);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfjsLib: any = await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pageTexts: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const text = content.items.map((item: any) => item.str).join(" ");
+    pageTexts.push(text.trim() ? text : "");
+  }
+  // Join non-empty page texts with "\n" and track the offset of each page
+  // in the joined string. Empty pages get the same offset as the next non-empty page.
+  const parts: string[] = [];
+  const pageOffsets: number[] = [];
+  let offset = 0;
+  for (let i = 0; i < pageTexts.length; i++) {
+    if (pageTexts[i]) {
+      if (parts.length > 0) offset++; // "\n" separator
+      pageOffsets.push(offset);
+      parts.push(pageTexts[i]);
+      offset += pageTexts[i].length;
+    } else {
+      // Empty page: point to current end position (will map to the next non-empty page's content)
+      pageOffsets.push(offset);
+    }
+  }
+  if (parts.length === 0) return null;
+  return { text: parts.join("\n"), numPages: pdf.numPages, pageOffsets };
+}
+
+/** Compute a page label (e.g. "pages 2-5 of 24") for a chunk based on its character offsets. */
+function computePageLabel(startOffset: number, endOffset: number, pageOffsets: number[], numPages: number): string {
+  let startPage = 1;
+  let endPage = 1;
+  for (let i = 0; i < pageOffsets.length; i++) {
+    if (pageOffsets[i] <= startOffset) startPage = i + 1;
+    if (pageOffsets[i] <= endOffset) endPage = i + 1;
+  }
+  return `pages ${startPage}-${endPage} of ${numPages}`;
 }
 
 // Simple string checksum using hash

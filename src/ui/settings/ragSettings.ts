@@ -389,8 +389,9 @@ function displayEmbeddingSettings(
         btn.setButtonText(t("settings.localLlmModal.fetching"));
         btn.setDisabled(true);
         try {
-          const apiKey = ragSetting.embeddingApiKey || getGeminiApiKey(plugin.settings);
-          const models = await fetchEmbeddingModels(apiKey, ragSetting.embeddingBaseUrl || undefined);
+          const current = plugin.getRagSetting(name) ?? ragSetting;
+          const apiKey = current.embeddingApiKey || getGeminiApiKey(plugin.settings);
+          const models = await fetchEmbeddingModels(apiKey, current.embeddingBaseUrl || undefined);
           if (models.length === 0) {
             // Show text input as fallback
             if (embeddingDropdown) embeddingDropdown.addClass("llm-hub-hidden");
@@ -405,11 +406,11 @@ function displayEmbeddingSettings(
             embeddingDropdown.empty();
             for (const model of models) {
               const opt = embeddingDropdown.createEl("option", { text: model, value: model });
-              if (model === ragSetting.embeddingModel) {
+              if (model === current.embeddingModel) {
                 opt.selected = true;
               }
             }
-            if (!ragSetting.embeddingModel || !models.includes(ragSetting.embeddingModel)) {
+            if (!current.embeddingModel || !models.includes(current.embeddingModel)) {
               const selected = models[0];
               await plugin.updateRagSetting(name, { embeddingModel: selected });
               embeddingDropdown.value = selected;
