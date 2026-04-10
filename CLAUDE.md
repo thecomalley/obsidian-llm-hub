@@ -45,7 +45,7 @@ This runs `version-bump.mjs` which updates `package.json`, `manifest.json`, and 
   - `fetchEmbeddingModels()` - Fetches available models (Ollama /api/tags or /v1/models)
 - **openaiProvider.ts** - OpenAI-compatible API provider (chat, image generation)
 - **anthropicProvider.ts** - Anthropic API provider (chat with tools)
-- **tools.ts** - Function calling tool definitions (16 tools for vault operations)
+- **tools.ts** - Function calling tool definitions (15 tools for vault operations)
 - **cliProvider.ts** - CLI backend abstraction for Gemini/Claude/Codex CLIs
   - `CliProviderManager` - Manages CLI provider instances
   - Uses `child_process.spawn` with `shell: false` for security
@@ -135,7 +135,7 @@ This runs `version-bump.mjs` which updates `package.json`, `manifest.json`, and 
 
 ### Workflow Types (`src/workflow/types.ts`)
 
-- `WorkflowNodeType` - 24 node types (command, http, note, dialog, mcp, script, etc.)
+- `WorkflowNodeType` - 25 node types (command, http, note, dialog, mcp, script, etc.)
 - `WORKFLOW_NODE_TYPES` - Set of all valid node type strings (single source of truth)
 - `isWorkflowNodeType()` - Type guard used by parser.ts and codeblockSync.ts
 - `normalizeValue()` - Converts unknown YAML values to string (shared utility)
@@ -169,5 +169,5 @@ When adding a new workflow node type, **ALL** of the following files must be upd
 - Obsidian API accessed via `app.vault` (files) and `app.workspace` (UI)
 - React components rendered inside Obsidian's ItemView
 - File attachments converted to Base64 and sent as `inlineData` parts
-- CLI providers dynamically import `child_process` (unavailable on mobile)
-- Desktop and mobile supported; CLI mode is desktop-only
+- CLI providers dynamically import `child_process`
+- Desktop only

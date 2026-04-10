@@ -23,6 +23,8 @@ After a semantic search, use the keyword filter at the top of the results list t
 - Click the **+ AND** button to add another filter field
 - Click **✕** to remove a filter field
 - Matches against both chunk text and file path
+- Whitespace in text is normalized (newlines, fullwidth spaces collapsed) so PDF extraction artifacts don't break matching
+- Also matches against a space-stripped version of the text, so CJK words split by PDF extraction spaces still match (e.g. searching "3つのコア機能" matches "3 つのコア機能")
 - The "Select all" checkbox and count reflect the filtered view
 - Clear all filters to see all results again
 
@@ -32,6 +34,8 @@ Each filter field has an **✦** (sparkle) button that uses AI to expand your ke
 
 - Enter one or more keywords, then click ✦
 - The configured **AI Refine Model** generates related terms and replaces the field content
+- If the input is not in English, English translations and related English terms are also included
+- Redundant terms that contain an original keyword as a substring are automatically removed (they would not improve OR filtering)
 - Click the **↩** (undo) button to restore the original keywords
 - Requires a model to be selected in **AI Refine Model** (search settings gear icon)
 
@@ -93,10 +97,12 @@ Click **✨ Refine with AI** in the chunk editor to automatically expand and cle
 
 ## PDF Result Handling
 
-- **Internal RAG** (indexed by this plugin): PDFs are attached as extracted page chunks
-- **External RAG** (pre-built index with extracted text): A per-result dropdown lets you choose:
-  - **As text** — Editable text extracted from the PDF
-  - **As PDF chunk** — Original PDF pages with inline preview
+PDF search results have a per-result dropdown to choose the attachment mode:
+
+- **As text** — Text is extracted from the PDF using PDF.js. The extracted text is shown in the result preview, supports keyword filtering, and can be edited in the chunk editor. Works for both vault files and external (absolute path) PDFs.
+- **As PDF chunk** — Original PDF pages with inline preview, attached as binary
+
+When search results are loaded, text extraction runs automatically in the background for all PDF results, replacing the metadata label with actual content. This enables keyword filtering and editing on real PDF text.
 
 ## Index Settings
 

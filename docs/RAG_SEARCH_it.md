@@ -23,6 +23,8 @@ Dopo una ricerca semantica, utilizza il filtro per parola chiave in cima alla li
 - Clicca sul pulsante **+ E** per aggiungere un campo filtro
 - Clicca su **✕** per rimuovere un campo filtro
 - Cerca sia nel testo del frammento che nel percorso del file
+- Gli spazi nel testo vengono normalizzati (a capo e spazi a larghezza piena vengono compressi) in modo che gli artefatti dell'estrazione PDF non impediscano la corrispondenza
+- La corrispondenza avviene anche su una versione del testo con gli spazi rimossi, in modo che le parole CJK separate da spazi nell'estrazione PDF vengano comunque trovate (es. la ricerca di "3つのコア機能" corrisponde a "3 つのコア機能")
 - La casella "Seleziona tutto" e il conteggio riflettono la vista filtrata
 - Cancella tutti i filtri per rivedere tutti i risultati
 
@@ -32,6 +34,8 @@ Ogni campo filtro ha un pulsante **✦** che usa l'IA per espandere le parole ch
 
 - Inserisci le parole chiave e clicca su ✦
 - Il **Modello di raffinamento IA** configurato genera termini correlati e sostituisce il contenuto del campo
+- Se l'input non è in inglese, vengono incluse anche traduzioni in inglese e termini correlati in inglese
+- I termini ridondanti che contengono una parola chiave originale come sottostringa vengono automaticamente rimossi (non migliorerebbero il filtraggio OR)
 - Clicca sul pulsante **↩** (annulla) per ripristinare le parole chiave originali
 - Richiede la selezione di un modello in **Modello di raffinamento IA** (icona ingranaggio delle impostazioni di ricerca)
 
@@ -93,10 +97,12 @@ Fare clic su **✨ Refine with AI** nell'editor di chunk per espandere e ripulir
 
 ## Gestione dei risultati PDF
 
-- **RAG interno** (indicizzato da questo plugin): i PDF vengono allegati come chunk di pagine estratte
-- **RAG esterno** (indice pre-costruito con testo estratto): un menu a tendina per risultato consente di scegliere:
-  - **Come testo** — Testo modificabile estratto dal PDF
-  - **Come chunk PDF** — Pagine PDF originali con anteprima inline
+I risultati di ricerca PDF hanno un menu a tendina per risultato per scegliere la modalità di allegato:
+
+- **As text** — Il testo viene estratto dal PDF utilizzando PDF.js. Il testo estratto viene mostrato nell'anteprima del risultato, supporta il filtraggio per parole chiave e può essere modificato nell'editor di chunk. Funziona sia per i file nel vault che per i PDF esterni (percorso assoluto).
+- **As PDF chunk** — Pagine PDF originali con anteprima inline, allegate come file binari
+
+Quando i risultati di ricerca vengono caricati, l'estrazione del testo viene eseguita automaticamente in background per tutti i risultati PDF, sostituendo l'etichetta dei metadati con il contenuto effettivo. Questo consente il filtraggio per parole chiave e la modifica sul testo reale del PDF.
 
 ## Impostazioni dell'indice
 

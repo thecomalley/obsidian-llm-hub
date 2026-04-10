@@ -10,7 +10,7 @@ Assistant IA **gratuit et open-source** pour Obsidian avec **Chat**, **Automatis
 
 - **Chat LLM Multi-Fournisseurs** - Utilisez Gemini, OpenAI, Anthropic, OpenRouter, Grok, des LLMs locaux ou des backends CLI
 - **Opérations sur le Coffre** - L'IA lit, écrit, recherche et édite vos notes avec Function Calling (Gemini, OpenAI, Anthropic)
-- **Constructeur de Workflows** - Automatisez des tâches multi-étapes avec l'éditeur visuel de nœuds et 24 types de nœuds
+- **Constructeur de Workflows** - Automatisez des tâches multi-étapes avec l'éditeur visuel de nœuds et 25 types de nœuds
 - **Recherche Sémantique (RAG)** - Recherche vectorielle locale avec onglet de recherche dédié, aperçu PDF et flux résultats vers chat
 - **AI Discussion** - Arène de débat multi-modèle avec réponses parallèles, vote et détermination du gagnant
 - **Historique d'Édition** - Suivez et restaurez les modifications faites par l'IA avec vue des différences

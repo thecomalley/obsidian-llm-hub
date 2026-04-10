@@ -10,7 +10,7 @@
 
 - **Multi-Provider LLM-Chat** - Verwenden Sie Gemini, OpenAI, Anthropic, OpenRouter, Grok, lokale LLMs oder CLI-Backends
 - **Vault-Operationen** - KI liest, schreibt, sucht und bearbeitet Ihre Notizen mit Function Calling (Gemini, OpenAI, Anthropic)
-- **Workflow Builder** - Automatisieren Sie mehrstufige Aufgaben mit visuellem Node-Editor und 24 Node-Typen
+- **Workflow Builder** - Automatisieren Sie mehrstufige Aufgaben mit visuellem Node-Editor und 25 Node-Typen
 - **Semantische Suche (RAG)** - Lokale Vektorsuche mit dediziertem Such-Tab, PDF-Vorschau und Ergebnis-zu-Chat-Flow
 - **AI Discussion** - Multi-Modell-Debattenarena mit parallelen Antworten, Abstimmung und Gewinner-Ermittlung
 - **Bearbeitungsverlauf** - Verfolgen und Wiederherstellen von KI-Änderungen mit Diff-Ansicht

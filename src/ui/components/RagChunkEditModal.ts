@@ -1,5 +1,6 @@
 import { Modal, App, Notice } from "obsidian";
 import { getLocalRagStore, type LocalRagSearchResult } from "src/core/localRagStore";
+import { extractPdfText } from "src/vault/search";
 import { streamChatForModel } from "src/core/discussionEngine";
 import type { LlmHubSettings, ModelType, Message } from "src/types";
 import { t } from "src/i18n";
@@ -203,8 +204,18 @@ export class RagChunkEditModal extends Modal {
       return;
     }
 
+    // For PDF chunks, the stored text is just a metadata label — extract real text
+    let displayText = adjacent.text;
+    if (adjacent.contentType === "pdf" && /^\[Pdf:/i.test(adjacent.text) && adjacent.pageLabel) {
+      const pageMatch = adjacent.pageLabel.match(/pages?\s+(\d+)\s*-\s*(\d+)/i);
+      const startPage = pageMatch ? parseInt(pageMatch[1], 10) : undefined;
+      const endPage = pageMatch ? parseInt(pageMatch[2], 10) : undefined;
+      const extracted = await extractPdfText(this.app, adjacent.filePath, startPage, endPage);
+      if (extracted) displayText = extracted;
+    }
+
     const currentText = this.textarea.value;
-    const newPart = this.getNonOverlappingText(currentText, adjacent.text, direction);
+    const newPart = this.getNonOverlappingText(currentText, displayText, direction);
 
     if (direction === "prev") {
       this.firstChunkText = adjacent.text;

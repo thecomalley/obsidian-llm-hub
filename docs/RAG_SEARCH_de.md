@@ -23,6 +23,8 @@ Nach einer semantischen Suche können Sie den Stichwortfilter oben in der Ergebn
 - Klicken Sie auf **+ UND**, um ein Filterfeld hinzuzufügen
 - Klicken Sie auf **✕**, um ein Filterfeld zu entfernen
 - Durchsucht sowohl Chunk-Text als auch Dateipfad
+- Leerzeichen im Text werden normalisiert (Zeilenumbrüche, Vollbreite-Leerzeichen zusammengeführt), sodass PDF-Extraktionsartefakte den Abgleich nicht beeinträchtigen
+- Zusätzlich wird gegen eine leerzeichenbereinigte Version des Textes abgeglichen, sodass CJK-Wörter, die durch PDF-Extraktionsleerzeichen getrennt sind, trotzdem gefunden werden (z. B. findet die Suche nach "3つのコア機能" auch "3 つのコア機能")
 - Das Kontrollkästchen "Alle auswählen" und die Anzahl spiegeln die gefilterte Ansicht wider
 - Löschen Sie alle Filter, um alle Ergebnisse wieder anzuzeigen
 
@@ -32,6 +34,8 @@ Jedes Filterfeld hat einen **✦**-Button, der KI nutzt, um Ihre Stichwörter mi
 
 - Geben Sie Stichwörter ein und klicken Sie auf ✦
 - Das konfigurierte **KI-Verfeinerungsmodell** generiert verwandte Begriffe und ersetzt den Feldinhalt
+- Bei nicht-englischsprachiger Eingabe werden auch englische Übersetzungen und verwandte englische Begriffe einbezogen
+- Redundante Begriffe, die ein ursprüngliches Stichwort als Teilzeichenkette enthalten, werden automatisch entfernt (sie würden die ODER-Filterung nicht verbessern)
 - Klicken Sie auf **↩** (Rückgängig), um die ursprünglichen Stichwörter wiederherzustellen
 - Erfordert die Auswahl eines Modells unter **KI-Verfeinerungsmodell** (Zahnrad-Symbol der Sucheinstellungen)
 
@@ -93,10 +97,12 @@ Klicken Sie im Chunk-Editor auf **✨ Refine with AI**, um den Text mithilfe ein
 
 ## Behandlung von PDF-Ergebnissen
 
-- **Internes RAG** (von diesem Plugin indiziert): PDFs werden als extrahierte Seiten-Chunks angehängt
-- **Externes RAG** (vorgefertigter Index mit extrahiertem Text): Ein Dropdown pro Ergebnis ermöglicht die Auswahl:
-  - **Als Text** — Bearbeitbarer, aus dem PDF extrahierter Text
-  - **Als PDF-Chunk** — Original-PDF-Seiten mit Inline-Vorschau
+PDF-Suchergebnisse verfügen über ein Dropdown-Menü pro Ergebnis zur Auswahl des Anhangmodus:
+
+- **As text** — Der Text wird mithilfe von PDF.js aus dem PDF extrahiert. Der extrahierte Text wird in der Ergebnisvorschau angezeigt, unterstützt Stichwortfilterung und kann im Chunk-Editor bearbeitet werden. Funktioniert sowohl für Vault-Dateien als auch für externe (absolute Pfad) PDFs.
+- **As PDF chunk** — Original-PDF-Seiten mit Inline-Vorschau, als Binärdatei angehängt
+
+Beim Laden der Suchergebnisse wird die Textextraktion automatisch im Hintergrund für alle PDF-Ergebnisse ausgeführt und ersetzt die Metadaten-Beschriftung durch den tatsächlichen Inhalt. Dies ermöglicht Stichwortfilterung und Bearbeitung von echtem PDF-Text.
 
 ## Index-Einstellungen
 

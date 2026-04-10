@@ -23,6 +23,8 @@ Después de una búsqueda semántica, utilice el filtro por palabra clave en la 
 - Haga clic en el botón **+ Y** para agregar un campo de filtro
 - Haga clic en **✕** para eliminar un campo de filtro
 - Busca tanto en el texto del fragmento como en la ruta del archivo
+- Los espacios en blanco del texto se normalizan (saltos de línea, espacios de ancho completo se colapsan) para que los artefactos de extracción de PDF no interrumpan la coincidencia
+- También se compara contra una versión del texto sin espacios, por lo que las palabras CJK separadas por espacios de extracción de PDF siguen coincidiendo (p. ej., buscar "3つのコア機能" coincide con "3 つのコア機能")
 - La casilla "Seleccionar todo" y el conteo reflejan la vista filtrada
 - Borre todos los filtros para ver todos los resultados nuevamente
 
@@ -32,6 +34,8 @@ Cada campo de filtro tiene un botón **✦** que usa IA para expandir sus palabr
 
 - Ingrese palabras clave y luego haga clic en ✦
 - El **Modelo de refinamiento IA** configurado genera términos relacionados y reemplaza el contenido del campo
+- Si la entrada no está en inglés, también se incluyen traducciones al inglés y términos relacionados en inglés
+- Los términos redundantes que contienen una palabra clave original como subcadena se eliminan automáticamente (no mejorarían el filtrado OR)
 - Haga clic en el botón **↩** (deshacer) para restaurar las palabras clave originales
 - Requiere seleccionar un modelo en **Modelo de refinamiento IA** (icono de engranaje de configuración de búsqueda)
 
@@ -93,10 +97,12 @@ Haga clic en **✨ Refine with AI** en el editor de chunks para expandir y limpi
 
 ## Manejo de resultados PDF
 
-- **RAG interno** (indexado por este plugin): los PDF se adjuntan como chunks de páginas extraídas
-- **RAG externo** (índice preconstruido con texto extraído): un menú desplegable por resultado permite elegir:
-  - **Como texto** — Texto editable extraído del PDF
-  - **Como chunk PDF** — Páginas PDF originales con vista previa en línea
+Los resultados de búsqueda PDF tienen un menú desplegable por resultado para elegir el modo de adjunto:
+
+- **As text** — El texto se extrae del PDF usando PDF.js. El texto extraído se muestra en la vista previa del resultado, admite filtrado por palabras clave y puede editarse en el editor de chunks. Funciona tanto para archivos del vault como para PDFs externos (ruta absoluta).
+- **As PDF chunk** — Páginas PDF originales con vista previa en línea, adjuntadas como binario
+
+Cuando se cargan los resultados de búsqueda, la extracción de texto se ejecuta automáticamente en segundo plano para todos los resultados PDF, reemplazando la etiqueta de metadatos con el contenido real. Esto permite el filtrado por palabras clave y la edición sobre texto PDF real.
 
 ## Configuración del índice
 

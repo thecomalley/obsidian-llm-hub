@@ -382,19 +382,20 @@ Build automated multi-step workflows directly in Markdown files. **No programmin
 
 ## Available Node Types
 
-24 node types are available for building workflows:
+25 node types are available for building workflows:
 
 | Category | Nodes |
 |----------|-------|
 | Variables | `variable`, `set` |
 | Control | `if`, `while` |
 | LLM | `command` |
-| Data | `http`, `json`, `script` |
+| Data | `http`, `json`, `script`, `shell` |
 | Notes | `note`, `note-read`, `note-search`, `note-list`, `folder-list`, `open` |
 | Files | `file-explorer`, `file-save` |
 | Prompts | `prompt-file`, `prompt-selection`, `dialog` |
 | Composition | `workflow` |
 | External | `mcp`, `obsidian-command` |
+| RAG | `rag-sync` |
 | Utility | `sleep` |
 
 > **For detailed node specifications and examples, see [WORKFLOW_NODES.md](docs/WORKFLOW_NODES.md)**

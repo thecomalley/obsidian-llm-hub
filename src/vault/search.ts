@@ -1,6 +1,66 @@
-import { TFolder, type App } from "obsidian";
+import { TFolder, TFile, type App, loadPdfJs } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
+
+// In-memory cache for extracted PDF text, keyed by "path:startPage-endPage"
+const pdfTextCache = new Map<string, { mtime: number; size: number; text: string | null }>();
+
+/**
+ * Extract text from a PDF file (or specific page range) using Obsidian's built-in PDF.js.
+ * Returns null if the PDF has no extractable text (e.g. scanned/image-only).
+ * @param startPage 1-based start page (inclusive). Omit for all pages.
+ * @param endPage 1-based end page (inclusive). Omit for all pages.
+ */
+export async function extractPdfText(
+  app: App,
+  filePath: string,
+  startPage?: number,
+  endPage?: number,
+): Promise<string | null> {
+  const cacheKey = `${filePath}:${startPage ?? 0}-${endPage ?? 0}`;
+  const isAbsolute = filePath.startsWith("/") || /^[A-Z]:\\/i.test(filePath);
+  const stat = isAbsolute ? null : await app.vault.adapter.stat(filePath);
+  if (stat) {
+    const cached = pdfTextCache.get(cacheKey);
+    if (cached && cached.mtime === stat.mtime && cached.size === stat.size) {
+      return cached.text;
+    }
+  }
+
+  try {
+    let buffer: ArrayBuffer;
+    if (isAbsolute) {
+      const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+      if (!fs) return null;
+      const nodeBuffer = await fs.promises.readFile(filePath);
+      buffer = nodeBuffer.buffer.slice(nodeBuffer.byteOffset, nodeBuffer.byteOffset + nodeBuffer.byteLength) as ArrayBuffer;
+    } else {
+      const file = app.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) return null;
+      buffer = await app.vault.readBinary(file);
+    }
+
+    const pdfjsLib = await loadPdfJs();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+    const from = startPage ?? 1;
+    const to = endPage ?? pdf.numPages;
+    const pages: string[] = [];
+    for (let i = from; i <= Math.min(to, pdf.numPages); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const text = content.items.map((item: any) => item.str).join(" ");
+      if (text.trim()) pages.push(text);
+    }
+    const result = pages.length > 0 ? pages.join("\n") : null;
+    if (stat) pdfTextCache.set(cacheKey, { mtime: stat.mtime, size: stat.size, text: result });
+    return result;
+  } catch {
+    if (stat) pdfTextCache.set(cacheKey, { mtime: stat.mtime, size: stat.size, text: null });
+    return null;
+  }
+}
 
 export interface SearchResult {
   path: string;
@@ -15,7 +75,7 @@ export function searchByName(
   query: string,
   limit = 10
 ): SearchResult[] {
-  const files = app.vault.getMarkdownFiles();
+  const files = app.vault.getFiles().filter(f => f.extension === "md" || f.extension === "pdf");
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -59,13 +119,19 @@ export async function searchByContent(
   query: string,
   limit = 10
 ): Promise<SearchResult[]> {
-  const files = app.vault.getMarkdownFiles();
+  const files = app.vault.getFiles().filter(f => f.extension === "md" || f.extension === "pdf");
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
 
   for (const file of files) {
-    const content = await app.vault.cachedRead(file);
+    let content: string | null;
+    if (file.extension === "pdf") {
+      content = await extractPdfText(app, file.path);
+      if (!content) continue;
+    } else {
+      content = await app.vault.cachedRead(file);
+    }
     const contentLower = content.toLowerCase();
 
     const index = contentLower.indexOf(searchTerm);

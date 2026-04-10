@@ -20,8 +20,10 @@ import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, LOCAL_LLM_MODEL } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
+import { extractPdfText } from "src/vault/search";
 import { extensionToMimeType } from "src/core/embeddingProvider";
 import { streamChatForModel } from "src/core/discussionEngine";
+import { parseFilterTerms, matchesFilter, removeRedundantTerms } from "./searchUtils";
 import { t } from "src/i18n";
 
 class SearchHelpModal extends Modal {
@@ -94,6 +96,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   const [aiPrevValues, setAiPrevValues] = useState<Map<number, string>>(new Map());
   const aiAbortRef = useRef<AbortController | null>(null);
   const [editedIndices, setEditedIndices] = useState<Set<number>>(new Set());
+  const pdfTextExtractedRef = useRef<Set<number>>(new Set());
+  const pdfOriginalTexts = useRef<Map<number, string>>(new Map());
   const [refinedIndices, setRefinedIndices] = useState<Set<number>>(new Set());
   const [chunkBoundaries, setChunkBoundaries] = useState<Map<number, { first: string; last: string }>>(new Map());
   const [refineModel, setRefineModel] = useState<ModelType | "">(plugin.workspaceState.selectedModel || "");
@@ -365,6 +369,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
     setEditedIndices(new Set());
     setRefinedIndices(new Set());
     setChunkBoundaries(new Map());
+    pdfTextExtractedRef.current = new Set();
+    pdfOriginalTexts.current = new Map();
 
     try {
       const apiKey = ragSetting.embeddingApiKey || getGeminiApiKey(plugin.settings);
@@ -432,6 +438,38 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
     })();
   };
 
+  // Extract actual text for PDF results whose text is just a metadata label.
+  // This enables keyword filtering, text preview, and editing on the real content.
+  useEffect(() => {
+    let cancelled = false;
+    const extract = async () => {
+      for (let i = 0; i < results.length; i++) {
+        if (cancelled) break;
+        const result = results[i];
+        if (result.contentType !== "pdf") continue;
+        if (pdfTextExtractedRef.current.has(i)) continue;
+        if (!/^\[Pdf:/i.test(result.text)) continue;
+
+        pdfOriginalTexts.current.set(i, result.text);
+        const pageMatch = result.pageLabel?.match(/pages?\s+(\d+)\s*-\s*(\d+)/i);
+        const startPage = pageMatch ? parseInt(pageMatch[1], 10) : undefined;
+        const endPage = pageMatch ? parseInt(pageMatch[2], 10) : undefined;
+        const extracted = await extractPdfText(plugin.app, result.filePath, startPage, endPage);
+        if (cancelled) break;
+        pdfTextExtractedRef.current.add(i);
+        if (extracted) {
+          setResults(prev => {
+            const next = [...prev];
+            next[i] = { ...prev[i], text: extracted };
+            return next;
+          });
+        }
+      }
+    };
+    void extract();
+    return () => { cancelled = true; };
+  }, [results]);
+
   const toggleExpanded = (index: number) => {
     const result = results[index];
     const isExpanding = !expandedIndices.has(index);
@@ -465,18 +503,17 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   };
 
   // Filtered results: pairs of [originalIndex, result] matching the keyword filters.
-  // Each field: space-separated OR (any term matches). Between fields: AND (all fields must match).
+  // Each field: space-separated OR (any term matches), quoted phrases match as-is. Between fields: AND.
   const filteredResults: [number, LocalRagSearchResult][] = (() => {
     const activeFilters = keywordFilters
-      .map(f => f.value.toLowerCase().split(/\s+/).filter(t => t.length > 0))
+      .map(f => parseFilterTerms(f.value))
       .filter(terms => terms.length > 0);
     if (activeFilters.length === 0) return results.map((r, i) => [i, r] as [number, LocalRagSearchResult]);
     return results
       .map((r, i) => [i, r] as [number, LocalRagSearchResult])
       .filter(([, r]) => {
-        const text = (r.text + " " + r.filePath).toLowerCase();
-        // AND across fields: every field must have at least one matching term (OR within field)
-        return activeFilters.every(terms => terms.some(term => text.includes(term)));
+        const rawText = r.text + " " + r.filePath;
+        return activeFilters.every(terms => matchesFilter(rawText, terms));
       });
   })();
 
@@ -508,10 +545,9 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
       if (!result) continue;
 
       // Non-text content → attach as media file
-      // External RAG PDF with real text: respect per-result pdfModes choice
-      const hasPdfText = result.contentType === "pdf" && !result.text.startsWith("[Pdf:");
-      const pdfMode = hasPdfText ? (pdfModes.get(idx) ?? "text") : "pdf";
-      if (result.contentType && result.contentType !== "text" && !(hasPdfText && pdfMode === "text")) {
+      // For PDFs, respect per-result pdfModes choice (default: "text" to try extraction)
+      const pdfMode = result.contentType === "pdf" ? (pdfModes.get(idx) ?? "text") : undefined;
+      if (result.contentType && result.contentType !== "text" && pdfMode !== "text") {
         mediaReferences.push({
           filePath: result.filePath,
           contentType: result.contentType,
@@ -520,8 +556,31 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         continue;
       }
 
+      // For PDF in text mode, extract text using PDF.js
+      // If the user has already edited the text, honour their edits
+      let textContent: string;
+      if (result.contentType === "pdf" && pdfMode === "text" && !editedIndices.has(idx)) {
+        // Parse page range from pageLabel (e.g. "pages 1-6 of 24")
+        const pageMatch = result.pageLabel?.match(/pages?\s+(\d+)\s*-\s*(\d+)/i);
+        const startPage = pageMatch ? parseInt(pageMatch[1], 10) : undefined;
+        const endPage = pageMatch ? parseInt(pageMatch[2], 10) : undefined;
+        const extracted = await extractPdfText(plugin.app, result.filePath, startPage, endPage);
+        if (!extracted) {
+          // No extractable text → fall back to media attachment
+          mediaReferences.push({
+            filePath: result.filePath,
+            contentType: result.contentType,
+            pageLabel: result.pageLabel,
+          });
+          continue;
+        }
+        textContent = extracted;
+      } else {
+        textContent = result.text;
+      }
+
       // Text content (or PDF with extracted text) → attach as editable text
-      const content = `[Source: ${result.filePath}] (relevance: ${result.score.toFixed(3)})\n\n${result.text}`;
+      const content = `[Source: ${result.filePath}] (relevance: ${result.score.toFixed(3)})\n\n${textContent}`;
       const fileName = result.filePath.split("/").pop() || result.filePath;
       const nameWithChunk = result.chunkIndex > 0
         ? `${fileName} (chunk ${result.chunkIndex})`
@@ -576,8 +635,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         "Given the user's search keywords, suggest additional synonyms, related terms, and alternate phrasings that would help find similar content.",
         "Return ONLY a space-separated list of suggested keywords (no numbering, no explanations, no punctuation except hyphens within compound words).",
         "Include the original keywords in your response.",
+        "If the input is not in English, also include English translations and related English terms.",
         "Keep the total number of terms between 5 and 15.",
-        "Respond in the same language as the input keywords.",
       ].join(" ");
       const messages: Message[] = [{ role: "user", content: currentTerms, timestamp: Date.now() }];
       let result = "";
@@ -596,7 +655,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
       }
       const suggested = result.trim();
       if (suggested && !abortController.signal.aborted) {
-        setKeywordFilters(prev => prev.map(f => f.id === filterId ? { ...f, value: suggested } : f));
+        const value = removeRedundantTerms(suggested, currentTerms);
+        setKeywordFilters(prev => prev.map(f => f.id === filterId ? { ...f, value } : f));
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
@@ -842,9 +902,9 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
             <input
               type="number"
               min={1}
-              max={200}
+              max={999}
               value={topK}
-              onChange={e => setTopK(Math.max(1, Math.min(200, parseInt(e.target.value) || 10)))}
+              onChange={e => setTopK(Math.max(1, Math.min(999, parseInt(e.target.value) || 10)))}
               className="llm-hub-search-param-input"
             />
           </label>
@@ -1039,7 +1099,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                   {editedIndices.has(index) && (
                     <span className="llm-hub-search-result-edited-badge">{t("search.edited")}</span>
                   )}
-                  {result.contentType === "pdf" && !result.text.startsWith("[Pdf:") && (
+                  {result.contentType === "pdf" && (
                     <select
                       className="llm-hub-search-pdf-mode"
                       value={pdfModes.get(index) ?? "text"}
@@ -1061,7 +1121,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                 {(() => {
                   const ct = result.contentType;
                   const showMediaPreview = ct === "image" || ct === "audio" || ct === "video"
-                    || (ct === "pdf" && (pdfModes.get(index) ?? (result.text.startsWith("[Pdf:") ? "pdf" : "text")) === "pdf");
+                    || (ct === "pdf" && (pdfModes.get(index) ?? "text") === "pdf");
                   return showMediaPreview;
                 })() ? (
                   <>
@@ -1105,6 +1165,9 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                           className="llm-hub-search-result-edit-btn clickable-icon"
                           onClick={e => {
                             e.stopPropagation();
+                            const origText = pdfOriginalTexts.current.get(index);
+                            const boundary = chunkBoundaries.get(index)
+                              ?? (origText ? { first: origText, last: origText } : undefined);
                             new RagChunkEditModal(plugin.app, result, selectedRagSetting, query, plugin.settings, refineModel as ModelType, refinedIndices.has(index), (edited) => {
                               setResults(prev => {
                                 const next = [...prev];
@@ -1116,7 +1179,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                               if (edited.refined) {
                                 setRefinedIndices(prev => new Set(prev).add(index));
                               }
-                            }, chunkBoundaries.get(index)).open();
+                            }, boundary).open();
                           }}
                           title={t("search.editChunk")}
                         >

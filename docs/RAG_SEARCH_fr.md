@@ -23,6 +23,8 @@ Après une recherche sémantique, utilisez le filtre par mot-clé en haut de la 
 - Cliquez sur le bouton **+ ET** pour ajouter un champ de filtre
 - Cliquez sur **✕** pour supprimer un champ de filtre
 - Recherche dans le texte du fragment et le chemin du fichier
+- Les espaces dans le texte sont normalisés (sauts de ligne, espaces pleine largeur regroupés) afin que les artefacts d'extraction PDF n'empêchent pas la correspondance
+- La correspondance est également effectuée sur une version du texte sans espaces, de sorte que les mots CJK séparés par des espaces d'extraction PDF correspondent toujours (par ex., la recherche de "3つのコア機能" correspond à "3 つのコア機能")
 - La case "Tout sélectionner" et le compteur reflètent la vue filtrée
 - Effacez tous les filtres pour revoir tous les résultats
 
@@ -32,6 +34,8 @@ Chaque champ de filtre dispose d'un bouton **✦** qui utilise l'IA pour enrichi
 
 - Saisissez des mots-clés puis cliquez sur ✦
 - Le **Modèle d'affinage IA** configuré génère des termes associés et remplace le contenu du champ
+- Si la saisie n'est pas en anglais, des traductions anglaises et des termes anglais associés sont également inclus
+- Les termes redondants contenant un mot-clé original comme sous-chaîne sont automatiquement supprimés (ils n'amélioreraient pas le filtrage OU)
 - Cliquez sur le bouton **↩** (annuler) pour restaurer les mots-clés originaux
 - Nécessite la sélection d'un modèle dans **Modèle d'affinage IA** (icône engrenage des paramètres de recherche)
 
@@ -93,10 +97,12 @@ Cliquez sur **✨ Refine with AI** dans l'éditeur de chunk pour étendre et net
 
 ## Traitement des résultats PDF
 
-- **RAG interne** (indexé par ce plugin) : les PDF sont joints sous forme de chunks de pages extraites
-- **RAG externe** (index pré-construit avec texte extrait) : un menu déroulant par résultat permet de choisir :
-  - **En texte** — Texte modifiable extrait du PDF
-  - **En chunk PDF** — Pages PDF originales avec aperçu en ligne
+Les résultats de recherche PDF disposent d'un menu déroulant par résultat pour choisir le mode de pièce jointe :
+
+- **As text** — Le texte est extrait du PDF à l'aide de PDF.js. Le texte extrait est affiché dans l'aperçu du résultat, prend en charge le filtrage par mots-clés et peut être modifié dans l'éditeur de chunk. Fonctionne aussi bien pour les fichiers du vault que pour les PDF externes (chemin absolu).
+- **As PDF chunk** — Pages PDF originales avec aperçu en ligne, jointes en tant que fichier binaire
+
+Lors du chargement des résultats de recherche, l'extraction de texte s'exécute automatiquement en arrière-plan pour tous les résultats PDF, remplaçant l'étiquette de métadonnées par le contenu réel. Cela permet le filtrage par mots-clés et l'édition sur le texte PDF réel.
 
 ## Paramètres d'index
 

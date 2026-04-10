@@ -10,7 +10,7 @@
 
 - **멀티 프로바이더 LLM Chat** - Gemini, OpenAI, Anthropic, OpenRouter, Grok, 로컬 LLM 또는 CLI 백엔드 사용
 - **Vault 작업** - AI가 Function Calling으로 노트를 읽고, 쓰고, 검색하고, 편집 (Gemini, OpenAI, Anthropic)
-- **Workflow Builder** - 비주얼 노드 편집기와 24개 노드 유형으로 다단계 작업 자동화
+- **Workflow Builder** - 비주얼 노드 편집기와 25개 노드 유형으로 다단계 작업 자동화
 - **Semantic Search (RAG)** - 전용 검색 탭, PDF 미리보기, 검색 결과에서 Chat으로의 연동을 갖춘 로컬 벡터 검색
 - **AI Discussion** - 병렬 응답, 투표, 우승자 결정이 가능한 멀티 모델 토론 아레나
 - **Edit History** - AI가 만든 변경 사항을 diff 뷰로 추적하고 복원
