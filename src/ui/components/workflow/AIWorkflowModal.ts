@@ -10,7 +10,7 @@ import { getWorkflowSpecification } from "src/workflow/workflowSpec";
 import type { SidebarNode, WorkflowNodeType, ExecutionStep } from "src/workflow/types";
 import { listWorkflowOptions, normalizeYamlText } from "src/workflow/parser";
 import { ExecutionHistoryManager } from "src/workflow/history";
-import { renderDiffView, createDiffViewToggle } from "./DiffRenderer";
+import { renderDiffView, createDiffViewToggle, formatLineComments, type DiffRendererState } from "./DiffRenderer";
 import { WorkflowGenerationModal } from "./WorkflowGenerationModal";
 import { showWorkflowPreview } from "./WorkflowPreviewModal";
 import { showExecutionHistorySelect } from "./ExecutionHistorySelectModal";
@@ -61,6 +61,7 @@ class WorkflowConfirmModal extends Modal {
   private previousRequest: string;
   private resolvePromise: (result: WorkflowConfirmResult) => void;
   private additionalRequestEl: HTMLTextAreaElement | null = null;
+  private diffState: DiffRendererState | null = null;
 
   constructor(
     app: App,
@@ -99,9 +100,11 @@ class WorkflowConfirmModal extends Modal {
     // Create diff view with toggle
     const diffLabel = contentEl.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
     diffLabel.createEl("span", { text: t("workflowModal.changes") });
-    const diffWrapper = contentEl.createDiv();
-    const diffState = renderDiffView(diffWrapper, this.oldYaml, this.newYaml);
-    createDiffViewToggle(diffLabel, diffState);
+    const diffWrapper = contentEl.createDiv({ cls: "ai-workflow-confirm-diff" });
+    this.diffState = renderDiffView(diffWrapper, this.oldYaml, this.newYaml, {
+      enableComments: true,
+    });
+    createDiffViewToggle(diffLabel, this.diffState);
 
     // Feedback textarea (always visible)
     const additionalRequestContainer = contentEl.createDiv({
@@ -134,12 +137,25 @@ class WorkflowConfirmModal extends Modal {
       text: t("message.requestChanges"),
       cls: "mod-warning",
     });
+    const updateRequestChangesState = () => {
+      const hasComments = this.diffState ? this.diffState.lineComments.size > 0 : false;
+      const hasText = !!(this.additionalRequestEl?.value?.trim());
+      requestChangesBtn.disabled = !hasComments && !hasText;
+    };
     requestChangesBtn.disabled = !(this.previousRequest?.trim());
-    this.additionalRequestEl.addEventListener("input", () => {
-      requestChangesBtn.disabled = !(this.additionalRequestEl?.value?.trim());
-    });
+    if (this.diffState) {
+      this.diffState.onCommentsChange = () => updateRequestChangesState();
+    }
+    this.additionalRequestEl.addEventListener("input", () => updateRequestChangesState());
     requestChangesBtn.addEventListener("click", () => {
-      const additionalRequest = this.additionalRequestEl?.value?.trim() || "";
+      const generalFeedback = this.additionalRequestEl?.value?.trim() || "";
+      const lineCommentsFeedback = this.diffState
+        ? formatLineComments("workflow", this.diffState.lineComments)
+        : "";
+      const parts: string[] = [];
+      if (lineCommentsFeedback) parts.push(lineCommentsFeedback);
+      if (generalFeedback) parts.push(generalFeedback);
+      const additionalRequest = parts.join("\n");
       this.resolvePromise({
         result: "no",
         additionalRequest,

@@ -3346,6 +3346,24 @@
   max-width: 90vw;
 }
 
+.ai-workflow-confirm-modal .llm-hub-edit-confirm-preview-label {
+  flex-shrink: 0;
+}
+
+.ai-workflow-confirm-diff {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ai-workflow-confirm-modal .workflow-preview-additional {
+  flex-shrink: 0;
+}
+
+.ai-workflow-confirm-modal .ai-workflow-buttons {
+  flex-shrink: 0;
+}
+
 .llm-hub-modal-resizable.modal {
   width: 80vw;
   max-width: 1200px;

@@ -281,7 +281,16 @@ function buildHistoryEntry(
   resolvedMentions?: ResolvedMention[]
 ): string {
   const timestamp = new Date().toLocaleString();
-  let entry = `> - ${timestamp}: ${action} - "${description}"`;
+
+  // If description is multi-line, use first line as summary and collapse the rest
+  const lines = description.split('\n').filter(l => l.trim());
+  const summary = lines[0];
+  let entry = `> - ${timestamp}: ${action} - "${summary}"`;
+
+  if (lines.length > 1) {
+    const detailLines = lines.slice(1).join('\n>   > ');
+    entry += `\n>   > [!note]- Details\n>   > ${detailLines}`;
+  }
 
   // Add collapsed sections for resolved file contents
   if (resolvedMentions && resolvedMentions.length > 0) {
