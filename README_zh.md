@@ -44,7 +44,7 @@
 ### Gemini 免费 API 密钥使用技巧
 
 - **速率限制** 按模型计算，每日重置。切换模型可继续使用。
-- **Gemma 模型** 和 **Gemini CLI** 在聊天中不支持仓库操作，但**工作流仍可使用 `note`、`note-read` 等节点类型读写笔记**。`{content}` 和 `{selection}` 变量同样有效。
+- **Gemma 4** 无法在单个请求中同时使用函数调用和 RAG/Web Search。当 RAG 或 Web Search 启用时，Vault 工具会自动禁用。**CLI 模型**和**本地 LLM** 完全不支持仓库操作，但**工作流仍可使用 `note`、`note-read` 等节点类型读写笔记**。`{content}` 和 `{selection}` 变量同样有效。
 
 ---
 
@@ -92,7 +92,7 @@ AI 聊天功能提供与您所选 LLM 提供商的交互式对话界面，与您
 > `{selection}` 和 `{content}` 都**故意不在输入区域展开**——由于聊天输入框较小，展开长文本会使输入变得困难。内容会在您发送消息时展开，您可以通过查看聊天中已发送的消息来验证这一点。
 
 > [!NOTE]
-> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这在 Gemma 模型中不可用（不支持仓库工具）。Gemini CLI 可通过 shell 读取文件，但响应格式可能有所不同。
+> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这在 CLI 模型或本地 LLM 中不可用（不支持仓库工具）。Gemini CLI 可通过 shell 读取文件，但响应格式可能有所不同。
 
 ## 文件附件
 
@@ -139,14 +139,14 @@ AI 可以使用以下工具与您的仓库交互：
 | 条件 | 默认模式 | 可更改 |
 |------|----------|--------|
 | CLI 模型（Gemini/Claude/Codex CLI） | Vault: 关闭 | 否 |
-| Gemma 模型 | Vault: 关闭 | 否 |
-| 启用 Web Search | Vault: 关闭 | 否 |
+| 本地 LLM | Vault: 关闭 | 否 |
+| Gemma 4 + RAG/Web Search | Vault: 关闭 | 是（禁用 RAG/Web Search 后工具会重新启用） |
 | 普通 | Vault: 全部 | 是 |
 
 **为什么某些模式是强制的：**
 
-- **CLI/Gemma 模型**：这些模型不支持函数调用，因此无法使用 Vault 工具。
-- **Web Search**：按设计，当启用 Web Search 时，Vault 工具会被禁用。
+- **CLI/本地 LLM 模型**：这些模型不支持函数调用，因此无法使用 Vault 工具。
+- **Gemma 4**：函数调用和 RAG/Web Search 无法在单个请求中同时使用。当一个启用时，另一个会自动禁用。
 
 ## 安全编辑
 
@@ -467,7 +467,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 | Gemini 2.5 Pro | Pro 模型，1M 上下文 |
 | Gemini 3 Pro (Image) | Pro 图像生成，4K |
 | Gemini 3.1 Flash (Image) | 快速、低成本图像生成 |
-| Gemma 3 (27B/12B/4B/1B) | 免费，不支持 Vault 工具 |
+| Gemma 4 | 免费，函数调用和 RAG/Web Search 互斥 |
 
 > **Thinking 模式：** 对于支持的聊天模型，请使用 **Always Think** 开关。**Gemini 3.1 Pro** 始终使用 Thinking 模式，无法关闭。
 

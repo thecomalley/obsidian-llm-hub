@@ -44,7 +44,7 @@
 ### Gemini Free API Key Tips
 
 - **Rate limits** are per-model and reset daily. Switch models to continue working.
-- **Gemma models** and **Gemini CLI** don't support vault operations in Chat, but **Workflows can still read/write notes** using `note`, `note-read`, and other node types. `{content}` and `{selection}` variables also work.
+- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models** and **Local LLMs** don't support vault operations at all, but **Workflows can still read/write notes** using `note`, `note-read`, and other node types. `{content}` and `{selection}` variables also work.
 
 ---
 
@@ -92,7 +92,7 @@ Reference files and variables by typing `@`:
 > Both `{selection}` and `{content}` are intentionally **not expanded** in the input area—since the chat input is compact, expanding long text would make typing difficult. The content is expanded when you send the message, which you can verify by checking your sent message in the chat.
 
 > [!NOTE]
-> Vault file @mentions insert only the file path - the AI reads content via tools. This doesn't work with Gemma models (no vault tool support). Gemini CLI can read files via shell, but response format may differ.
+> Vault file @mentions insert only the file path - the AI reads content via tools. This doesn't work with CLI models or Local LLMs (no vault tool support). Gemini CLI can read files via shell, but response format may differ.
 
 ## File Attachments
 
@@ -139,14 +139,14 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 | Condition | Default Mode | Changeable |
 |-----------|--------------|------------|
 | CLI models (Gemini/Claude/Codex CLI) | Vault: Off | No |
-| Gemma models | Vault: Off | No |
-| Web Search enabled | Vault: Off | No |
+| Local LLM | Vault: Off | No |
+| Gemma 4 + RAG/Web Search | Vault: Off | Yes (disabling RAG/Web Search re-enables tools) |
 | Normal | Vault: All | Yes |
 
 **Why some modes are forced:**
 
-- **CLI/Gemma models**: These models do not support function calling, so Vault tools cannot be used.
-- **Web Search**: By design, Vault tools are disabled when Web Search is enabled.
+- **CLI/Local LLM models**: These models do not support function calling, so Vault tools cannot be used.
+- **Gemma 4**: Function calling and RAG/Web Search cannot be combined in a single request. When one is active, the other is automatically disabled.
 
 ## Safe Editing
 
@@ -472,7 +472,7 @@ Workflows can be automatically triggered by Obsidian events:
 | Gemini 2.5 Pro | Pro model, 1M context |
 | Gemini 3 Pro (Image) | Pro image generation, 4K |
 | Gemini 3.1 Flash (Image) | Fast, low-cost image generation |
-| Gemma 3 (27B/12B/4B/1B) | Free, no vault tool support |
+| Gemma 4 | Free, function calling and RAG/Web Search are mutually exclusive |
 
 > **Thinking mode:** Use the **Always Think** toggles for supported chat models. **Gemini 3.1 Pro** always uses thinking mode and does not support disabling it.
 

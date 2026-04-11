@@ -44,7 +44,7 @@ Assistant IA **gratuit et open-source** pour Obsidian avec **Chat**, **Automatis
 ### Conseils pour la Clé API Gratuite Gemini
 
 - Les **limites de débit** sont par modèle et se réinitialisent quotidiennement. Changez de modèle pour continuer à travailler.
-- Les **modèles Gemma** et **Gemini CLI** ne supportent pas les opérations sur le coffre dans le Chat, mais les **Workflows peuvent toujours lire/écrire des notes** en utilisant les types de nœuds `note`, `note-read` et autres. Les variables `{content}` et `{selection}` fonctionnent également.
+- **Gemma 4** ne peut pas combiner les appels de fonction avec RAG/Web Search dans une seule requête. Lorsque RAG ou Web Search est actif, les outils Vault sont automatiquement désactivés. Les **modèles CLI** et les **LLMs locaux** ne supportent pas du tout les opérations sur le coffre, mais les **Workflows peuvent toujours lire/écrire des notes** en utilisant les types de nœuds `note`, `note-read` et autres. Les variables `{content}` et `{selection}` fonctionnent également.
 
 ---
 
@@ -92,7 +92,7 @@ Référencez des fichiers et variables en tapant `@` :
 > `{selection}` et `{content}` ne sont intentionnellement **pas développés** dans la zone de saisie—comme la zone de saisie du chat est compacte, développer un texte long rendrait la saisie difficile. Le contenu est développé lorsque vous envoyez le message, ce que vous pouvez vérifier en consultant votre message envoyé dans le chat.
 
 > [!NOTE]
-> Les mentions @ de fichiers du coffre insèrent uniquement le chemin du fichier - l'IA lit le contenu via les outils. Cela ne fonctionne pas avec les modèles Gemma (pas de support des outils du coffre). Gemini CLI peut lire les fichiers via le shell, mais le format de réponse peut différer.
+> Les mentions @ de fichiers du coffre insèrent uniquement le chemin du fichier - l'IA lit le contenu via les outils. Cela ne fonctionne pas avec les modèles CLI ou les LLMs locaux (pas de support des outils du coffre). Gemini CLI peut lire les fichiers via le shell, mais le format de réponse peut différer.
 
 ## Pièces Jointes
 
@@ -139,14 +139,14 @@ Lorsque l'IA gère des notes dans le Chat, elle utilise les outils du Vault. Con
 | Condition | Mode Par Défaut | Modifiable |
 |-----------|-----------------|------------|
 | Modèles CLI (Gemini/Claude/Codex CLI) | Vault: Désactivé | Non |
-| Modèles Gemma | Vault: Désactivé | Non |
-| Web Search activé | Vault: Désactivé | Non |
+| LLM Local | Vault: Désactivé | Non |
+| Gemma 4 + RAG/Web Search | Vault: Désactivé | Oui (désactiver RAG/Web Search réactive les outils) |
 | Normal | Vault: Tous | Oui |
 
 **Pourquoi certains modes sont forcés :**
 
-- **Modèles CLI/Gemma** : Ces modèles ne prennent pas en charge les appels de fonction, donc les outils Vault ne peuvent pas être utilisés.
-- **Web Search** : Par conception, les outils Vault sont désactivés lorsque Web Search est activé.
+- **Modèles CLI/LLM Local** : Ces modèles ne prennent pas en charge les appels de fonction, donc les outils Vault ne peuvent pas être utilisés.
+- **Gemma 4** : Les appels de fonction et RAG/Web Search ne peuvent pas être combinés dans une seule requête. Lorsque l'un est actif, l'autre est automatiquement désactivé.
 
 ## Édition Sécurisée
 
@@ -467,7 +467,7 @@ Les workflows peuvent être automatiquement déclenchés par des événements Ob
 | Gemini 2.5 Pro | Modèle Pro, contexte 1M |
 | Gemini 3 Pro (Image) | Génération d'images Pro, 4K |
 | Gemini 3.1 Flash (Image) | Génération d'images rapide et économique |
-| Gemma 3 (27B/12B/4B/1B) | Gratuit, pas de support des outils du coffre |
+| Gemma 4 | Gratuit, appels de fonction et RAG/Web Search mutuellement exclusifs |
 
 > **Mode Thinking :** Dans le chat, le mode thinking est déclenché par des mots-clés comme « réfléchis », « analyse » ou « considère » dans votre message. Cependant, **Gemini 3.1 Pro** utilise toujours le mode thinking indépendamment des mots-clés — ce modèle ne permet pas de désactiver le thinking.
 

@@ -201,6 +201,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Chat IDs that have been deleted — background streams check this to avoid
 	// resurrecting a deleted chat when they complete.
 	const deletedChatIdsRef = useRef<Set<string>>(new Set());
+	// Preserve the plugin-level last active chat across the component's first render
+	// so the mount-time restore effect can read it before sync-back starts.
+	const initialLastActiveChatIdRef = useRef<string | null>(plugin.lastActiveChatId);
+	const hasCompletedInitialRestoreRef = useRef(false);
 	const [vaultFiles, setVaultFiles] = useState<string[]>([]);
 	const [hasSelection, setHasSelection] = useState(false);
 	const [cliConfig, setCliConfig] = useState(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
@@ -514,12 +518,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 		};
 
-		const addErrorMessage = (errorMsg: Message) => {
-			if (isActive()) {
-				setMessages(prev => [...prev, errorMsg]);
-			}
-		};
-
 		// Called in `finally` — cleans up UI state if still foreground.
 		// Pass the stream's AbortController so it can be removed from
 		// the background tracking list when the stream was backgrounded.
@@ -535,7 +533,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 		};
 
-		return { mySessionId, myChatId, isActive, saveResult, addErrorMessage, cleanup };
+		return { mySessionId, myChatId, isActive, saveResult, cleanup };
 	}, [currentChatId, saveChatToDisk]);
 
 	// Detach the currently running stream (if any) so it continues in the
@@ -567,44 +565,47 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		// Capture session ID at mount time so we can detect if the user
 		// navigated elsewhere before the async restore completes.
 		const mountSessionId = activeSessionIdRef.current;
-		void loadChatHistories().then(() => {
-			// Skip restore if the user already started a new chat or loaded one
-			if (activeSessionIdRef.current !== mountSessionId) return;
+		void loadChatHistories().then(async () => {
+			try {
+				// Skip restore if the user already started a new chat or loaded one
+				if (activeSessionIdRef.current !== mountSessionId) return;
 
-			const lastId = plugin.lastActiveChatId;
-			if (!lastId) return;
+				const lastId = initialLastActiveChatIdRef.current;
+				if (!lastId) return;
 
-			void (async () => {
-				try {
-					const basePath = getChatFilePath(lastId);
-					let filePath = basePath;
-					let exists = await plugin.app.vault.adapter.exists(filePath);
-					if (!exists) {
-						filePath = basePath + ".encrypted";
-						exists = await plugin.app.vault.adapter.exists(filePath);
-					}
-					if (!exists) return;
-					// Re-check after async gap
+				const basePath = getChatFilePath(lastId);
+				let filePath = basePath;
+				let exists = await plugin.app.vault.adapter.exists(filePath);
+				if (!exists) {
+					filePath = basePath + ".encrypted";
+					exists = await plugin.app.vault.adapter.exists(filePath);
+				}
+				if (!exists) return;
+				// Re-check after async gap
+				if (activeSessionIdRef.current !== mountSessionId) return;
+
+				const content = await plugin.app.vault.adapter.read(filePath);
+				if (isEncryptedFile(content)) return;
+
+				const parsed = parseMarkdownToMessages(content);
+				if (parsed?.messages && parsed.messages.length > 0) {
+					// Final check before touching state
 					if (activeSessionIdRef.current !== mountSessionId) return;
-
-					const content = await plugin.app.vault.adapter.read(filePath);
-					if (isEncryptedFile(content)) return;
-
-					const parsed = parseMarkdownToMessages(content);
-					if (parsed?.messages && parsed.messages.length > 0) {
-						// Final check before touching state
-						if (activeSessionIdRef.current !== mountSessionId) return;
-						setMessages(parsed.messages);
-						setCurrentChatId(lastId);
-						setCliSession(parsed.cliSession || null);
-					}
-				} catch (e) { console.warn("Failed to restore last active chat:", e); }
-			})();
+					setMessages(parsed.messages);
+					setCurrentChatId(lastId);
+					setCliSession(parsed.cliSession || null);
+				}
+			} catch (e) {
+				console.warn("Failed to restore last active chat:", e);
+			} finally {
+				hasCompletedInitialRestoreRef.current = true;
+			}
 		});
 	}, [loadChatHistories]);
 
 	// Sync currentChatId → plugin.lastActiveChatId (in-memory, cleared on restart)
 	useEffect(() => {
+		if (!hasCompletedInitialRestoreRef.current) return;
 		plugin.lastActiveChatId = currentChatId;
 	}, [currentChatId, plugin]);
 
@@ -1191,7 +1192,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	// Send message via CLI provider
 	const sendMessageViaCli = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, addErrorMessage, cleanup: cleanupStream } = createStreamSession();
+		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
 		const isClaudeCli = currentModel === "claude-cli";
 		const isCodexCli = currentModel === "codex-cli";
@@ -1414,11 +1415,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			});
 		} catch (error) {
 			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			addErrorMessage({
+			const errorMessage: Message = {
 				role: "assistant",
 				content: t("chat.errorOccurred", { message: errorMessageText }),
 				timestamp: Date.now(),
-			});
+			};
+			await saveResult([...messages, userMessage, errorMessage]);
 			tracing.traceEnd(cliTraceId, { output: errorMessageText, metadata: { error: true } });
 			tracing.score(cliTraceId, { name: "status", value: 0, comment: errorMessageText });
 		} finally {
@@ -1428,7 +1430,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	// Send message via Local LLM provider
 	const sendMessageViaLocalLlm = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, addErrorMessage, cleanup: cleanupStream } = createStreamSession();
+		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
 		const llmConfig = plugin.settings.localLlmConfig || DEFAULT_LOCAL_LLM_CONFIG;
 
@@ -1629,11 +1631,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			});
 		} catch (error) {
 			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			addErrorMessage({
+			const errorMessage: Message = {
 				role: "assistant",
 				content: t("chat.errorOccurred", { message: errorMessageText }),
 				timestamp: Date.now(),
-			});
+			};
+			await saveResult([...messages, userMessage, errorMessage]);
 			tracing.traceEnd(llmTraceId, { output: errorMessageText, metadata: { error: true } });
 			tracing.score(llmTraceId, { name: "status", value: 0, comment: errorMessageText });
 		} finally {
@@ -1643,7 +1646,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	// Send message via API provider (OpenAI-compatible)
 	const sendMessageViaApiProvider = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, addErrorMessage, cleanup: cleanupStream } = createStreamSession();
+		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
 		const providerConfig = getActiveApiProvider();
 		const resolvedModelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "";
@@ -2142,11 +2145,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			});
 		} catch (error) {
 			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			addErrorMessage({
+			const errorMessage: Message = {
 				role: "assistant",
 				content: t("chat.errorOccurred", { message: errorMessageText }),
 				timestamp: Date.now(),
-			});
+			};
+			await saveResult([...messages, userMessage, errorMessage]);
 			tracing.traceEnd(apiTraceId, { output: errorMessageText, metadata: { error: true } });
 			tracing.score(apiTraceId, { name: "status", value: 0, comment: errorMessageText });
 		} finally {
@@ -2188,7 +2192,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 	// Send message via Gemini provider (uses @google/genai SDK)
 	const sendMessageViaGemini = async (content: string, attachments?: Attachment[], skillPath?: string, providerConfig?: ApiProviderConfig) => {
-		const { isActive, saveResult, addErrorMessage, cleanup: cleanupStream } = createStreamSession();
+		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
 		const apiKey = providerConfig?.apiKey || getGeminiApiKey(plugin.settings);
 		if (!apiKey) {
@@ -2980,11 +2984,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			}
 		} catch (error) {
 			const errorMessageText = buildErrorMessage(error);
-			addErrorMessage({
+			const errorMessage: Message = {
 				role: "assistant",
 				content: errorMessageText,
 				timestamp: Date.now(),
-			});
+			};
+			await saveResult([...messages, userMessage, errorMessage]);
 			tracing.traceEnd(traceId, {
 				output: errorMessageText,
 				metadata: { error: true },
