@@ -13,6 +13,7 @@ export type TabType = "chat" | "search" | "discussion" | "workflow";
 export interface TabContainerRef {
   getActiveChat: () => TFile | null;
   setActiveChat: (chat: TFile | null) => void;
+  setActiveTab: (tab: TabType) => void;
 }
 
 interface TabContainerProps {
@@ -28,6 +29,7 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
     useImperativeHandle(ref, () => ({
       getActiveChat: () => chatRef.current?.getActiveChat() ?? null,
       setActiveChat: (chat: TFile | null) => chatRef.current?.setActiveChat(chat),
+      setActiveTab: (tab: TabType) => setActiveTab(tab),
     }));
 
     const handleChatWithResults = useCallback((attachments: Attachment[]) => {
@@ -48,13 +50,13 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
             className={`llm-hub-tab ${activeTab === "chat" ? "active" : ""}`}
             onClick={() => setActiveTab("chat")}
           >
-            Chat
+            {t("chat.title")}
           </button>
           <button
             className={`llm-hub-tab ${activeTab === "workflow" ? "active" : ""}`}
             onClick={() => setActiveTab("workflow")}
           >
-            Workflow
+            {t("tab.workflowSkill")}
           </button>
           <button
             className={`llm-hub-tab ${activeTab === "search" ? "active" : ""}`}

@@ -3514,7 +3514,7 @@ async function executeSkillWorkflow(
 	// Read workflow file
 	const file = plugin.app.vault.getAbstractFileByPath(vaultPath);
 	if (!(file instanceof TFile)) {
-		return { error: `Workflow file not found: ${vaultPath}` };
+		return { error: `Workflow file not found: ${vaultPath}`, workflowId, workflowPath: vaultPath };
 	}
 
 	const content = await plugin.app.vault.read(file);
@@ -3524,7 +3524,7 @@ async function executeSkillWorkflow(
 	try {
 		workflow = parseWorkflowFromMarkdown(content, workflowRef.name);
 	} catch (e) {
-		return { error: `Failed to parse workflow: ${e instanceof Error ? e.message : String(e)}` };
+		return { error: `Failed to parse workflow: ${e instanceof Error ? e.message : String(e)}`, workflowId, workflowPath: vaultPath };
 	}
 
 	// Build input variables
@@ -3536,7 +3536,7 @@ async function executeSkillWorkflow(
 				variables.set(key, value);
 			}
 		} catch {
-			return { error: `Invalid variables JSON: ${variablesJson}` };
+			return { error: `Invalid variables JSON: ${variablesJson}`, workflowId, workflowPath: vaultPath };
 		}
 	}
 
@@ -3633,8 +3633,9 @@ async function executeSkillWorkflow(
 	} catch (e) {
 		modal.setComplete(false);
 		return {
-			error: `Workflow execution failed: ${e instanceof Error ? e.message : String(e)}`,
+			error: `Workflow execution failed: ${e instanceof Error ? e.message : String(e)}. Do not retry automatically — report the error to the user and ask how to proceed.`,
 			workflowId,
+			workflowPath: vaultPath,
 		};
 	} finally {
 		executionModalRef = null;
