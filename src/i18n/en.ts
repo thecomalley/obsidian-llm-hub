@@ -749,8 +749,8 @@ export const en = {
   "workflow.preview.no": "No, modify",
   "workflow.preview.regenerate": "Regenerate",
   "workflow.preview.cancel": "Cancel",
-  "workflow.preview.additionalRequest": "Enter your full request:",
-  "workflow.preview.additionalPlaceholder": "Enter the complete description of what you want the workflow to do...",
+  "workflow.preview.additionalRequest": "Additional request:",
+  "workflow.preview.additionalPlaceholder": "Leave empty to accept as-is, or describe what should change to refine the result...",
   "workflow.preview.referenceHistory": "Reference execution history",
   "workflow.preview.stepsSelected": "{{count}} step(s) selected",
 
@@ -883,6 +883,7 @@ export const en = {
   "aiWorkflow.confirmSkillChanges": "Confirm skill changes",
   "aiWorkflow.skillInstructionsChanges": "SKILL.md instructions — changes:",
   "aiWorkflow.workflowYamlChanges": "Workflow YAML — changes:",
+  "aiWorkflow.noChanges": "(no changes)",
   "aiWorkflow.describeCreate": "Describe the workflow or skill you want to create:",
   "aiWorkflow.describeModify": "Describe the modifications you want:",
   "aiWorkflow.placeholderCreate": "E.g., summarize the current note and save to a summary file",
