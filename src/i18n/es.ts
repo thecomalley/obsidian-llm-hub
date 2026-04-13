@@ -883,6 +883,8 @@ export const es: Record<string, string> = {
   "aiWorkflow.modifyTitle": "Modificar flujo de trabajo con IA",
   "aiWorkflow.modifySkillTitle": "Modificar skill con IA",
   "aiWorkflow.confirmSkillChanges": "Confirmar cambios del skill",
+  "aiWorkflow.skillInstructionsChanges": "Instrucciones de SKILL.md — cambios:",
+  "aiWorkflow.workflowYamlChanges": "YAML del workflow — cambios:",
   "aiWorkflow.describeCreate": "Describe el workflow o skill que deseas crear:",
   "aiWorkflow.describeModify": "Describe las modificaciones que deseas:",
   "aiWorkflow.placeholderCreate": "Ej., Resumir la nota actual y guardar en un archivo de resumen",

@@ -881,6 +881,8 @@ export const en = {
   "aiWorkflow.modifyTitle": "Modify workflow with AI",
   "aiWorkflow.modifySkillTitle": "Modify skill with AI",
   "aiWorkflow.confirmSkillChanges": "Confirm skill changes",
+  "aiWorkflow.skillInstructionsChanges": "SKILL.md instructions — changes:",
+  "aiWorkflow.workflowYamlChanges": "Workflow YAML — changes:",
   "aiWorkflow.describeCreate": "Describe the workflow or skill you want to create:",
   "aiWorkflow.describeModify": "Describe the modifications you want:",
   "aiWorkflow.placeholderCreate": "E.g., summarize the current note and save to a summary file",

@@ -883,6 +883,8 @@ export const de: Record<string, string> = {
   "aiWorkflow.modifyTitle": "Workflow mit KI ändern",
   "aiWorkflow.modifySkillTitle": "Skill mit KI ändern",
   "aiWorkflow.confirmSkillChanges": "Skill-Änderungen bestätigen",
+  "aiWorkflow.skillInstructionsChanges": "SKILL.md-Anweisungen — Änderungen:",
+  "aiWorkflow.workflowYamlChanges": "Workflow YAML — Änderungen:",
   "aiWorkflow.describeCreate": "Beschreiben Sie den Workflow oder Skill, den Sie erstellen möchten:",
   "aiWorkflow.describeModify": "Beschreiben Sie die gewünschten Änderungen:",
   "aiWorkflow.placeholderCreate": "Z.B. Die aktuelle Notiz zusammenfassen und in eine Zusammenfassungsdatei speichern",

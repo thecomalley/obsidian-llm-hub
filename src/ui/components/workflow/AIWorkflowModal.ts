@@ -69,9 +69,14 @@ class WorkflowConfirmModal extends Modal {
   private previousRequest: string;
   private generationContext: GenerationContext;
   private isSkill: boolean;
+  /** For Modify Skill with AI: old SKILL.md instructions body (diff "before"). */
+  private oldInstructions?: string;
+  /** For Modify Skill with AI: new SKILL.md instructions body (diff "after"). */
+  private newInstructions?: string;
   private resolvePromise: (result: WorkflowConfirmResult) => void;
   private additionalRequestEl: HTMLTextAreaElement | null = null;
   private diffState: DiffRendererState | null = null;
+  private instructionsDiffState: DiffRendererState | null = null;
   private markdownComponent: Component | null = null;
 
   constructor(
@@ -82,7 +87,9 @@ class WorkflowConfirmModal extends Modal {
     previousRequest: string,
     generationContext: GenerationContext,
     isSkill: boolean,
-    resolvePromise: (result: WorkflowConfirmResult) => void
+    resolvePromise: (result: WorkflowConfirmResult) => void,
+    oldInstructions?: string,
+    newInstructions?: string,
   ) {
     super(app);
     this.oldYaml = oldYaml;
@@ -91,6 +98,8 @@ class WorkflowConfirmModal extends Modal {
     this.previousRequest = previousRequest;
     this.generationContext = generationContext;
     this.isSkill = isSkill;
+    this.oldInstructions = oldInstructions;
+    this.newInstructions = newInstructions;
     this.resolvePromise = resolvePromise;
   }
 
@@ -111,8 +120,11 @@ class WorkflowConfirmModal extends Modal {
     // so the textarea and buttons below always remain visible.
     const scrollable = contentEl.createDiv({ cls: "ai-workflow-confirm-scrollable" });
 
-    // Explanation section (if available)
-    if (this.explanation) {
+    // Explanation section (if available). For skill mode we suppress it here
+    // because the AI's pre-YAML text IS the new SKILL.md body and will be
+    // rendered as a proper diff below instead.
+    const showExplanation = this.explanation && !(this.isSkill && this.newInstructions !== undefined);
+    if (showExplanation && this.explanation) {
       const explanationContainer = scrollable.createDiv({ cls: "ai-workflow-explanation" });
       const header = explanationContainer.createDiv({ cls: "workflow-generation-section-header" });
       header.createEl("h3", { text: t("aiWorkflow.aiExplanation") });
@@ -131,9 +143,28 @@ class WorkflowConfirmModal extends Modal {
       explanationContainer.createEl("p", { text: this.explanation });
     }
 
+    // Skill mode: render SKILL.md instructions diff (old body vs new body) so
+    // the user can see both instruction-body changes and workflow YAML changes.
+    if (this.isSkill && this.newInstructions !== undefined) {
+      const instrLabel = scrollable.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
+      instrLabel.createEl("span", { text: t("aiWorkflow.skillInstructionsChanges") });
+      const instrWrapper = scrollable.createDiv({ cls: "ai-workflow-confirm-diff-wrapper ai-workflow-confirm-diff" });
+      this.instructionsDiffState = renderDiffView(
+        instrWrapper,
+        this.oldInstructions ?? "",
+        this.newInstructions,
+        { enableComments: false },
+      );
+      createDiffViewToggle(instrLabel, this.instructionsDiffState);
+    }
+
     // Create diff view with toggle
     const diffLabel = scrollable.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
-    diffLabel.createEl("span", { text: t("workflowModal.changes") });
+    diffLabel.createEl("span", {
+      text: this.isSkill && this.newInstructions !== undefined
+        ? t("aiWorkflow.workflowYamlChanges")
+        : t("workflowModal.changes"),
+    });
     const diffWrapper = scrollable.createDiv({ cls: "ai-workflow-confirm-diff-wrapper ai-workflow-confirm-diff" });
     this.diffState = renderDiffView(diffWrapper, this.oldYaml, this.newYaml, {
       enableComments: true,
@@ -280,10 +311,16 @@ function showWorkflowConfirmation(
   explanation: string | undefined,
   previousRequest: string,
   generationContext: GenerationContext,
-  isSkill: boolean
+  isSkill: boolean,
+  oldInstructions?: string,
+  newInstructions?: string,
 ): Promise<WorkflowConfirmResult> {
   return new Promise((resolve) => {
-    const modal = new WorkflowConfirmModal(app, oldYaml, newYaml, explanation, previousRequest, generationContext, isSkill, resolve);
+    const modal = new WorkflowConfirmModal(
+      app, oldYaml, newYaml, explanation, previousRequest,
+      generationContext, isSkill, resolve,
+      oldInstructions, newInstructions,
+    );
     modal.open();
   });
 }
@@ -1338,7 +1375,13 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
           result.explanation,
           currentRequest,
           generationContext,
-          this.isSkill()
+          this.isSkill(),
+          // For Modify Skill with AI: pass old SKILL.md body (captured via
+          // existingInstructions) and new body (skillInstructions parsed from
+          // this run) so the confirm modal can show a side-by-side instructions
+          // diff alongside the YAML diff.
+          this.isSkill() ? this.existingInstructions : undefined,
+          this.isSkill() ? result.skillInstructions : undefined,
         );
 
         if (confirmResult.result === "ok") {

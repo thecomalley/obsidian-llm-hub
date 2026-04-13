@@ -883,6 +883,8 @@ export const zh: Record<string, string> = {
   "aiWorkflow.modifyTitle": "使用 AI 修改工作流",
   "aiWorkflow.modifySkillTitle": "使用 AI 修改技能",
   "aiWorkflow.confirmSkillChanges": "确认技能更改",
+  "aiWorkflow.skillInstructionsChanges": "SKILL.md 指令 — 变更:",
+  "aiWorkflow.workflowYamlChanges": "工作流 YAML — 变更:",
   "aiWorkflow.describeCreate": "描述您要创建的工作流或技能：",
   "aiWorkflow.describeModify": "描述您想要的修改：",
   "aiWorkflow.placeholderCreate": "例如：总结当前笔记并保存到摘要文件",
