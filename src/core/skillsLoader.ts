@@ -1,19 +1,18 @@
 import { type App, TFile, TFolder, parseYaml } from "obsidian";
-import { parseWorkflowFromMarkdown } from "src/workflow/parser";
 import { SKILLS_FOLDER } from "src/types";
 import { getBuiltinSkillMetadata, isBuiltinSkillPath, loadBuiltinSkill } from "./builtinSkills";
 
 export interface SkillWorkflowRef {
-  path: string;            // relative path from skill folder (e.g. "workflows/lint.md")
-  name?: string;           // workflow name within the file (if multiple)
-  description: string;     // description for function calling tool
-  inputVariables?: string[]; // variables used but not initialized by any node
+  path: string;              // relative path from skill folder (e.g. "workflows/lint.md")
+  name?: string;             // workflow name within the file (if multiple)
+  description: string;       // description for function calling tool
+  inputVariables?: string[]; // declared by skill author in SKILL.md frontmatter
 }
 
 export interface SkillScriptRef {
   path: string;           // relative path from skill folder (e.g. "scripts/embed-index.sh")
   name: string;           // basename without extension (e.g. "embed-index")
-  description: string;    // description from frontmatter or filename
+  description: string;    // description from frontmatter
 }
 
 export interface SkillMetadata {
@@ -21,8 +20,8 @@ export interface SkillMetadata {
   description: string;
   folderPath: string;      // e.g. "LLMHub/skills/code-review"
   skillFilePath: string;   // e.g. "LLMHub/skills/code-review/SKILL.md"
-  workflows: SkillWorkflowRef[];  // workflow references from frontmatter
-  scripts: SkillScriptRef[];      // script references from frontmatter or auto-discovered
+  workflows: SkillWorkflowRef[];  // workflow references from SKILL.md frontmatter
+  scripts: SkillScriptRef[];      // script references from SKILL.md frontmatter
 }
 
 export interface LoadedSkill extends SkillMetadata {
@@ -38,10 +37,29 @@ function isValidSkillScriptPath(path: string): boolean {
 
 /**
  * Discover all skills: built-in skills + vault skills.
- * Each subfolder containing a SKILL.md is treated as a skill.
+ *
+ * SKILL.md frontmatter is the single source of truth for a skill's
+ * capabilities. Auto-scanning `workflows/` and `scripts/` is NOT performed —
+ * skill authors must declare each workflow/script explicitly in frontmatter so
+ * the LLM and runtime agree on what exists. Missing paths or missing
+ * inputVariables produce a console warning but do not drop the skill.
+ *
+ * Expected frontmatter:
+ * ```yaml
+ * ---
+ * name: my-skill
+ * description: ...
+ * workflows:
+ *   - path: workflows/do-x.md
+ *     description: ...
+ *     inputVariables: [filePath, mode]
+ * scripts:
+ *   - path: scripts/check.sh
+ *     description: ...
+ * ---
+ * ```
  */
 export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
-  // Start with built-in skills
   const skills: SkillMetadata[] = [...getBuiltinSkillMetadata()];
 
   const folder = app.vault.getAbstractFileByPath(SKILLS_FOLDER);
@@ -57,86 +75,70 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
     try {
       const content = await app.vault.cachedRead(skillFile);
       const { frontmatter } = parseFrontmatter(content);
+      const skillLabel = (frontmatter.name as string) || child.name;
 
-      // Parse workflow references from frontmatter
-      const rawWorkflows = frontmatter.workflows as Array<Record<string, unknown>> | undefined;
       const workflows: SkillWorkflowRef[] = [];
+      const rawWorkflows = frontmatter.workflows as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(rawWorkflows)) {
         for (const wf of rawWorkflows) {
-          if (wf && typeof wf.path === "string") {
-            workflows.push({
-              path: wf.path,
-              name: typeof wf.name === "string" ? wf.name : undefined,
-              description: typeof wf.description === "string" ? wf.description : wf.path,
-            });
+          if (!wf || typeof wf.path !== "string") {
+            console.warn(`[skills] ${skillLabel}: workflow entry missing "path" — skipped.`);
+            continue;
           }
+          const wfFile = app.vault.getAbstractFileByPath(`${child.path}/${wf.path}`);
+          if (!(wfFile instanceof TFile)) {
+            console.warn(`[skills] ${skillLabel}: workflow file not found at "${wf.path}".`);
+          }
+          const inputVariables = Array.isArray(wf.inputVariables)
+            ? (wf.inputVariables as unknown[]).filter((v): v is string => typeof v === "string")
+            : undefined;
+          if (inputVariables === undefined) {
+            console.warn(`[skills] ${skillLabel}: workflow "${wf.path}" has no "inputVariables" declared — the LLM will not know what to pass.`);
+          }
+          workflows.push({
+            path: wf.path,
+            name: typeof wf.name === "string" ? wf.name : undefined,
+            description: typeof wf.description === "string" ? wf.description : wf.path,
+            inputVariables,
+          });
         }
       }
 
-      // Auto-discover workflows/ directory
-      const workflowsDirPath = `${child.path}/workflows`;
-      const workflowsDir = app.vault.getAbstractFileByPath(workflowsDirPath);
-      if (workflowsDir instanceof TFolder) {
-        for (const wfChild of workflowsDir.children) {
-          if (wfChild instanceof TFile && wfChild.extension === "md") {
-            const relativePath = `workflows/${wfChild.name}`;
-            // Skip if already declared in frontmatter
-            if (!workflows.some(w => w.path === relativePath)) {
-              workflows.push({
-                path: relativePath,
-                description: wfChild.basename,
-              });
-            }
-          }
-        }
-      }
-
-      // Parse script references from frontmatter
-      const rawScripts = frontmatter.scripts as Array<Record<string, unknown>> | undefined;
       const scripts: SkillScriptRef[] = [];
+      const rawScripts = frontmatter.scripts as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(rawScripts)) {
         for (const sc of rawScripts) {
-          if (sc && typeof sc.path === "string" && isValidSkillScriptPath(sc.path)) {
-            const fileName = sc.path.split("/").pop() || sc.path;
-            const baseName = fileName.replace(/\.[^.]+$/, "");
-            scripts.push({
-              path: sc.path,
-              name: baseName,
-              description: typeof sc.description === "string" ? sc.description : fileName,
-            });
+          if (!sc || typeof sc.path !== "string") {
+            console.warn(`[skills] ${skillLabel}: script entry missing "path" — skipped.`);
+            continue;
           }
-        }
-      }
-
-      // Auto-discover scripts/ directory
-      const scriptsDirPath = `${child.path}/scripts`;
-      const scriptsDir = app.vault.getAbstractFileByPath(scriptsDirPath);
-      if (scriptsDir instanceof TFolder) {
-        for (const scChild of scriptsDir.children) {
-          if (scChild instanceof TFile) {
-            const relativePath = `scripts/${scChild.name}`;
-            // Skip if already declared in frontmatter
-            if (!scripts.some(s => s.path === relativePath)) {
-              scripts.push({
-                path: relativePath,
-                name: scChild.basename,
-                description: scChild.name,
-              });
-            }
+          if (!isValidSkillScriptPath(sc.path)) {
+            console.warn(`[skills] ${skillLabel}: script path "${sc.path}" must live under scripts/ — skipped.`);
+            continue;
           }
+          const scFile = app.vault.getAbstractFileByPath(`${child.path}/${sc.path}`);
+          if (!(scFile instanceof TFile)) {
+            console.warn(`[skills] ${skillLabel}: script file not found at "${sc.path}".`);
+          }
+          const fileName = sc.path.split("/").pop() || sc.path;
+          scripts.push({
+            path: sc.path,
+            name: fileName.replace(/\.[^.]+$/, ""),
+            description: typeof sc.description === "string" ? sc.description : fileName,
+          });
         }
       }
 
       skills.push({
-        name: (frontmatter.name as string) || child.name,
+        name: skillLabel,
         description: (frontmatter.description as string) || "",
         folderPath: child.path,
         skillFilePath,
         workflows,
         scripts,
       });
-    } catch {
-      // Skip unreadable skill files
+    } catch (e) {
+      console.warn(`[skills] failed to load ${skillFilePath}:`, e);
     }
   }
 
@@ -144,82 +146,96 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
 }
 
 /**
- * Load a skill's full content including references.
- * Handles both built-in skills and vault-installed skills.
+ * Load a skill's content. Built-in skills return their full in-memory body
+ * and references. Vault skills are returned in "lightweight" form (empty
+ * instructions/references) because `buildSkillSystemPrompt` expects the chat
+ * LLM to load SKILL.md on demand via `read_note`; reading every SKILL.md,
+ * references/*, and workflows/* file up front would be wasted I/O on the
+ * per-message hot path.
  */
-export async function loadSkill(app: App, metadata: SkillMetadata): Promise<LoadedSkill> {
-  // Handle built-in skills (no vault read needed)
+export function loadSkill(_app: App, metadata: SkillMetadata): LoadedSkill {
   if (isBuiltinSkillPath(metadata.folderPath)) {
     const builtin = loadBuiltinSkill(metadata.folderPath);
     if (builtin) return builtin;
-    return { ...metadata, instructions: "", references: [] };
+  }
+  return { ...metadata, instructions: "", references: [] };
+}
+
+/**
+ * Read the on-disk body of a vault skill (SKILL.md plus any files under
+ * references/) and return a fully-populated LoadedSkill. Used by the
+ * `[READ_SKILL: ...]` marker in CLI / Local-LLM mode and could be reused
+ * elsewhere when the LLM asks for the full skill content. Built-in skills
+ * already ship with their body, so this just returns them via `loadSkill`.
+ */
+export async function readSkillBody(app: App, metadata: SkillMetadata): Promise<LoadedSkill> {
+  if (isBuiltinSkillPath(metadata.folderPath)) {
+    return loadSkill(app, metadata);
   }
 
   const skillFile = app.vault.getAbstractFileByPath(metadata.skillFilePath);
   if (!(skillFile instanceof TFile)) {
     return { ...metadata, instructions: "", references: [] };
   }
+  const { body } = parseFrontmatter(await app.vault.cachedRead(skillFile));
 
-  const content = await app.vault.cachedRead(skillFile);
-  const { body } = parseFrontmatter(content);
-
-  // Collect reference files
   const references: string[] = [];
-  const refsPath = `${metadata.folderPath}/references`;
-  const refsFolder = app.vault.getAbstractFileByPath(refsPath);
-
+  const refsFolder = app.vault.getAbstractFileByPath(`${metadata.folderPath}/references`);
   if (refsFolder instanceof TFolder) {
     for (const child of refsFolder.children) {
       if (child instanceof TFile) {
         try {
-          const refContent = await app.vault.cachedRead(child);
-          references.push(`[${child.name}]\n${refContent}`);
+          references.push(`[${child.name}]\n${await app.vault.cachedRead(child)}`);
         } catch {
-          // Skip unreadable reference files
+          // skip unreadable reference file
         }
       }
     }
   }
 
-  // Extract input variables from workflow files
-  for (const wf of metadata.workflows) {
-    const wfPath = `${metadata.folderPath}/${wf.path}`;
-    const wfFile = app.vault.getAbstractFileByPath(wfPath);
-    if (wfFile instanceof TFile) {
-      try {
-        const wfContent = await app.vault.cachedRead(wfFile);
-        wf.inputVariables = extractInputVariables(wfContent, wf.name);
-      } catch {
-        // Skip unreadable workflow files
-      }
-    }
-  }
-
-  return {
-    ...metadata,
-    instructions: body.trim(),
-    references,
-  };
+  return { ...metadata, instructions: body.trim(), references };
 }
 
 /**
  * Build a system prompt section from loaded skills.
+ *
+ * Built-in skills are inlined in full (instructions, references, workflow /
+ * script listings) because they are always-on and their bodies ship with the
+ * plugin. Vault skills only contribute their name + description + workflow /
+ * script capability list (IDs, descriptions, inputVariables) from SKILL.md
+ * frontmatter; the instructions body and references/ contents stay lazy. In
+ * API/Discord mode the LLM fetches the body via the `read_note` tool; in CLI
+ * and Local-LLM mode it emits the `[READ_SKILL: skillName]` marker (vault
+ * tools are not available in those modes).
  */
 export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMode?: boolean }): string {
   if (skills.length === 0) return "";
   const isCli = options?.cliMode ?? false;
+  let sawLazyVaultSkill = false;
 
   const parts = skills.map(skill => {
-    let section = `## Skill: ${skill.name}\n\n${skill.instructions}`;
-    if (skill.references.length > 0) {
-      section += `\n\n### References\n\n${skill.references.join("\n\n")}`;
-    }
-    if (skill.workflows.length > 0) {
-      if (isCli) {
-        section += `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass.\n\nAfter you emit one or more markers, the system will execute each workflow and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further workflows or give the final answer. Available workflows:`;
-      } else {
-        section += `\n\n### Available Workflows\nUse the run_skill_workflow tool to execute these workflows:`;
+    const isBuiltin = isBuiltinSkillPath(skill.folderPath);
+
+    let section = `## Skill: ${skill.name}`;
+    if (isBuiltin) {
+      section += `\n\n${skill.instructions}`;
+      if (skill.references.length > 0) {
+        section += `\n\n### References\n\n${skill.references.join("\n\n")}`;
       }
+    } else {
+      if (skill.description) {
+        section += `\n\n${skill.description}`;
+      }
+      sawLazyVaultSkill = true;
+      section += isCli
+        ? `\n\nFull instructions and references are lazy-loaded. Emit \`[READ_SKILL: ${skill.name}]\` on its own line (no backticks/code block) to receive the SKILL.md body and reference files as a follow-up user message, then continue.`
+        : `\n\nSKILL.md path: \`${skill.skillFilePath}\` — call \`read_note\` on this path to load the full instructions and reference materials before acting.`;
+    }
+
+    if (skill.workflows.length > 0) {
+      section += isCli
+        ? `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass.\n\nAfter you emit one or more markers, the system will execute each workflow and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further workflows or give the final answer. Available workflows:`
+        : `\n\n### Available Workflows\nUse the run_skill_workflow tool to execute these workflows:`;
       for (const wf of skill.workflows) {
         const id = buildWorkflowToolId(skill.name, wf);
         section += `\n- \`${id}\`: ${wf.description}`;
@@ -229,11 +245,9 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
       }
     }
     if (skill.scripts.length > 0) {
-      if (isCli) {
-        section += `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass.\n\nAfter you emit one or more markers, the system will execute each script and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further scripts or give the final answer. Available scripts (desktop only):`;
-      } else {
-        section += `\n\n### Available Scripts\nUse the run_skill_script tool to execute these scripts (desktop only):`;
-      }
+      section += isCli
+        ? `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass.\n\nAfter you emit one or more markers, the system will execute each script and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further scripts or give the final answer. Available scripts (desktop only):`
+        : `\n\n### Available Scripts\nUse the run_skill_script tool to execute these scripts (desktop only):`;
       for (const sc of skill.scripts) {
         const id = buildScriptToolId(skill.name, sc);
         section += `\n- \`${id}\`: ${sc.description}`;
@@ -242,7 +256,17 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
     return section;
   });
 
-  return `\n\nThe following agent skills are active. Proactively use the skill's instructions, workflows, and scripts to fulfill the user's request.\nWhen a workflow lists "Input variables", pass them via the variables parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.\n\n${parts.join("\n\n---\n\n")}`;
+  const header = [
+    "The following agent skills are active. Proactively use each skill's instructions, workflows, and scripts to fulfill the user's request.",
+  ];
+  if (sawLazyVaultSkill) {
+    header.push(isCli
+      ? "For skills whose body is lazy-loaded, emit the `[READ_SKILL: skillName]` marker on its own line to load the full SKILL.md before acting; vault read tools are not available in this mode."
+      : "For skills that list a `SKILL.md path`, call `read_note` on that path to load the full instructions and references when you need them.");
+  }
+  header.push("Pass any required input variables to a workflow via the `variables` parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.");
+
+  return `\n\n${header.join("\n")}\n\n${parts.join("\n\n---\n\n")}`;
 }
 
 /**
@@ -311,75 +335,6 @@ export function collectSkillWorkflows(skills: LoadedSkill[]): Map<string, {
   }
 
   return map;
-}
-
-/**
- * Extract input variables from a workflow file.
- * Input variables are {{variables}} used in node properties but not initialized
- * by any node (via saveTo, variable/set name, etc.) and not system variables.
- */
-function extractInputVariables(workflowContent: string, workflowName?: string): string[] {
-  let workflow;
-  try {
-    workflow = parseWorkflowFromMarkdown(workflowContent, workflowName);
-  } catch {
-    return [];
-  }
-
-  const varPattern = /\{\{(\w[\w.[\]]*?)(?::json)?\}\}/g;
-  const usedVars = new Set<string>();
-  const initializedVars = new Set<string>();
-
-  const saveProperties = [
-    "saveTo", "saveFileTo", "savePathTo", "saveStatus",
-    "saveImageTo", "saveSelectionTo", "saveUiTo",
-  ];
-
-  for (const [, node] of workflow.nodes) {
-    // variable/set nodes initialize the variable named in 'name'
-    if ((node.type === "variable" || node.type === "set") && node.properties.name) {
-      initializedVars.add(node.properties.name);
-    }
-
-    // Save properties initialize variables
-    for (const prop of saveProperties) {
-      if (node.properties[prop]) {
-        initializedVars.add(node.properties[prop]);
-      }
-    }
-
-    // Scan all property values for {{variable}} references
-    for (const value of Object.values(node.properties)) {
-      let match;
-      varPattern.lastIndex = 0;
-      while ((match = varPattern.exec(String(value))) !== null) {
-        const rootVar = match[1].split(/[.[\]]/)[0];
-        if (rootVar) usedVars.add(rootVar);
-      }
-    }
-  }
-
-  // System variables injected by the runtime
-  // Include legacy __var__ forms for backward compatibility
-  const systemVars = new Set([
-    "_hotkeyContent", "_hotkeySelection", "_hotkeyActiveFile", "_hotkeySelectionInfo",
-    "_eventType", "_eventFilePath", "_eventFile", "_eventOldPath", "_eventFileContent",
-    "_workflowName", "_lastModel", "_date", "_time", "_datetime",
-    "_clipboard",
-    // Legacy __var__ forms (kept for backward compatibility with existing workflows)
-    "__hotkeyContent__", "__hotkeySelection__", "__hotkeyActiveFile__", "__hotkeySelectionInfo__",
-    "__eventType__", "__eventFilePath__", "__eventFile__", "__eventOldPath__", "__eventFileContent__",
-    "__workflowName__", "__lastModel__", "__date__", "__time__", "__datetime__",
-  ]);
-
-  const inputVars: string[] = [];
-  for (const v of usedVars) {
-    if (!initializedVars.has(v) && !systemVars.has(v)) {
-      inputVars.push(v);
-    }
-  }
-
-  return inputVars.sort();
 }
 
 /**

@@ -6,7 +6,7 @@ import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { tracing } from "src/core/tracingHooks";
 import { CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, DEFAULT_CLI_CONFIG, getGeminiApiKey, isApiProviderModel, getApiProviderId, getApiProviderModelName, SKILLS_FOLDER, WORKFLOWS_FOLDER, type ModelType, type Attachment, type StreamChunkUsage } from "src/types";
-import { getWorkflowSpecification } from "src/workflow/workflowSpec";
+import { getWorkflowSpecification, buildWorkflowSpecContext } from "src/workflow/workflowSpec";
 import type { SidebarNode, WorkflowNodeType, ExecutionStep } from "src/workflow/types";
 import { listWorkflowOptions, normalizeYamlText } from "src/workflow/parser";
 import { ExecutionHistoryManager } from "src/workflow/history";
@@ -1844,12 +1844,7 @@ ${outputInstruction}`;
   }
 
   private getWorkflowSpec(): string {
-    return getWorkflowSpecification({
-      cliConfig: this.plugin.settings.cliConfig,
-      mcpServers: this.plugin.settings.mcpServers || [],
-      ragSettingNames: Object.keys(this.plugin.workspaceState.ragSettings || {}),
-      apiProviders: this.plugin.settings.apiProviders.filter(p => p.enabled && p.verified),
-    });
+    return getWorkflowSpecification(buildWorkflowSpecContext(this.plugin));
   }
 
   private buildSystemPrompt(outputAsMarkdown = false, isSkill = false): string {
@@ -1875,7 +1870,7 @@ The body text that guides the AI assistant when this skill is activated in chat.
 **What to include:**
 - Role description with clear persona (e.g., "You are a code review assistant specializing in...")
 - Step-by-step behavioral guidelines explaining the reasoning behind each step
-- When and how to invoke the workflow, including what input variables to provide
+- When and how to invoke the workflow — reference each input variable by its **exact name** (as used in the workflow's \`{{var}}\` references) so the runtime's auto-derived \`inputVariables\` list matches what the body documents
 - Edge cases and how to handle them
 
 Example:
@@ -1885,14 +1880,30 @@ You are a code review assistant. When reviewing code:
 1. Check for common bugs and anti-patterns — these are the most impactful issues to catch early
 2. Suggest improvements for readability, because code is read far more often than written
 3. Verify error handling is adequate for production use
-4. Use the workflow to run automated checks, passing the file path as the "target" variable
+4. Use the workflow to run automated checks, passing the file path as the \`target\` variable
 
 When the user shares code without explicit review requests, still offer brief observations about potential issues. This proactive approach helps catch problems before they grow.
 \`\`\`
 
 ### 2. Workflow
 An executable workflow in YAML format that the skill provides as a tool.
-The workflow should have clear input variables that the AI will provide when calling run_skill_workflow, and meaningful output variables the AI can use to continue the conversation.
+- Any variable you read via \`{{var}}\` without initializing (no preceding \`variable\` / \`set\` node and no \`saveTo\` target) becomes an **input variable**. The runtime extracts these automatically and writes them into SKILL.md frontmatter as \`workflows[0].inputVariables\`, so the chat LLM will see them when deciding what to pass to \`run_skill_workflow\`.
+- Pick short, descriptive input variable names (e.g. \`filePath\`, \`query\`, \`mode\`). Avoid names starting with \`_\` — those are reserved for runtime-provided system variables.
+- Save meaningful results to named variables that the chat LLM can consume after \`run_skill_workflow\` returns.
+
+### Frontmatter (written for you)
+You do NOT need to emit SKILL.md frontmatter. The runtime constructs it from your output:
+\`\`\`yaml
+---
+name: <skill name>
+description: <skill description>
+workflows:
+  - path: workflows/workflow.md
+    description: <skill name>
+    inputVariables: [<derived from your workflow YAML>]
+---
+\`\`\`
+Just ensure the workflow's \`{{var}}\` usage is clean and unambiguous so the derived list is correct.
 `
       : "";
 

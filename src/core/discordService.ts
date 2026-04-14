@@ -13,6 +13,7 @@ import type { LlmHubPlugin } from "../plugin";
 import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand } from "../types";
 import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey } from "../types";
 import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
+import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
 import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillScripts, collectSkillWorkflows, type LoadedSkill, type SkillScriptRef, type SkillWorkflowRef } from "./skillsLoader";
 import { getInterpreter, runScript } from "./scriptRunner";
@@ -1027,7 +1028,7 @@ export class DiscordService {
       for (const path of activeSkillPaths) {
         const meta = allSkills.find(s => s.folderPath === path);
         if (meta) {
-          loadedSkills.push(await loadSkill(this.app, meta));
+          loadedSkills.push(loadSkill(this.app, meta));
         }
       }
     }
@@ -1052,6 +1053,7 @@ export class DiscordService {
     if (workflowMap.size > 0) {
       tools.push(skillWorkflowTool);
     }
+    tools.push(GET_WORKFLOW_SPEC_TOOL);
 
     const toolExecutor = createToolExecutor(this.app, {
       listNotesLimit: settings.listNotesLimit,
@@ -1070,6 +1072,9 @@ export class DiscordService {
         return await this.executeSkillWorkflow(
           args.workflowId as string, args.variables as string | undefined, workflowMap,
         );
+      }
+      if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+        return handleGetWorkflowSpec(args, this.plugin);
       }
       return await toolExecutor(name, args);
     };

@@ -14,6 +14,7 @@ import { WorkflowExecutionModal } from "./WorkflowExecutionModal";
 import type { LlmHubPlugin } from "src/plugin";
 import { SidebarNode, WorkflowNodeType, WorkflowInput, PromptCallbacks } from "src/workflow/types";
 import { loadFromCodeBlock, saveToCodeBlock } from "src/workflow/codeblockSync";
+import { extractInputVariables } from "src/workflow/inputVariables";
 import { listWorkflowOptions, parseWorkflowFromMarkdown, WorkflowOption } from "src/workflow/parser";
 import { WorkflowExecutor } from "src/workflow/executor";
 import { NodeEditorModal } from "./NodeEditorModal";
@@ -341,6 +342,72 @@ ${backticks}
 `;
 }
 
+/**
+ * Keep SKILL.md's `inputVariables` in sync with the workflow the panel just
+ * saved. Looks for a SKILL.md in either the same folder as the workflow file
+ * or its parent (skills/X/SKILL.md vs skills/X/workflows/Y.md), finds the
+ * workflow entry that points to this file, and rewrites its inputVariables
+ * based on the current node graph. Silently no-ops if no matching skill is
+ * found — regular non-skill workflows don't have a SKILL.md to update.
+ */
+async function syncSkillInputVariables(
+  app: App,
+  workflowFile: TFile,
+  nodes: SidebarNode[],
+): Promise<void> {
+  const parent = workflowFile.parent;
+  if (!parent) return;
+
+  let skillFile: TFile | null = null;
+  let relPath = workflowFile.name;
+  const sameFolderSkill = app.vault.getAbstractFileByPath(`${parent.path}/SKILL.md`);
+  if (sameFolderSkill instanceof TFile && sameFolderSkill.path !== workflowFile.path) {
+    skillFile = sameFolderSkill;
+  } else if (parent.parent) {
+    const parentSkill = app.vault.getAbstractFileByPath(`${parent.parent.path}/SKILL.md`);
+    if (parentSkill instanceof TFile) {
+      skillFile = parentSkill;
+      relPath = `${parent.name}/${workflowFile.name}`;
+    }
+  }
+  // Inline skill workflow (the SKILL.md itself IS the workflow file)
+  if (!skillFile && workflowFile.name === "SKILL.md") {
+    skillFile = workflowFile;
+    relPath = "SKILL.md";
+  }
+  if (!skillFile) return;
+
+  const content = await app.vault.read(skillFile);
+  const { frontmatter, body } = parseFrontmatter(content);
+  const rawWorkflows = Array.isArray(frontmatter.workflows)
+    ? (frontmatter.workflows as Record<string, unknown>[])
+    : null;
+  if (!rawWorkflows) return;
+
+  const targetIndex = rawWorkflows.findIndex(w => typeof w.path === "string" && w.path === relPath);
+  if (targetIndex < 0) return;
+
+  const derivedInputs = extractInputVariables(nodes);
+  const existing = rawWorkflows[targetIndex].inputVariables;
+  const existingArr = Array.isArray(existing)
+    ? (existing as unknown[]).filter((v): v is string => typeof v === "string")
+    : [];
+  const changed = existingArr.length !== derivedInputs.length
+    || existingArr.some((v, i) => v !== derivedInputs[i]);
+  if (!changed) return;
+
+  const nextEntry = { ...rawWorkflows[targetIndex] };
+  if (derivedInputs.length > 0) {
+    nextEntry.inputVariables = derivedInputs;
+  } else {
+    delete nextEntry.inputVariables;
+  }
+  const nextWorkflows = rawWorkflows.map((w, i) => (i === targetIndex ? nextEntry : w));
+  const nextFrontmatter = { ...frontmatter, workflows: nextWorkflows };
+  const nextContent = `---\n${stringifyYaml(nextFrontmatter).trimEnd()}\n---\n\n${body.trimStart()}`;
+  await app.vault.modify(skillFile, nextContent);
+}
+
 // Create skill folder structure from AI workflow result
 async function createSkillFromResult(
   app: App,
@@ -358,20 +425,21 @@ async function createSkillFromResult(
     }
   }
 
-  // Build SKILL.md content with properly quoted YAML values
-  const yamlName = JSON.stringify(result.name);
-  const yamlDesc = JSON.stringify(result.description || result.name);
   const skillBody = result.skillInstructions || result.description || "";
-  const skillContent = `---
-name: ${yamlName}
-description: ${yamlDesc}
-workflows:
-  - path: workflows/workflow.md
-    description: ${yamlName}
----
-
-${skillBody}
-`;
+  const inputVariables = extractInputVariables(result.nodes);
+  const workflowEntry: Record<string, unknown> = {
+    path: "workflows/workflow.md",
+    description: result.name,
+  };
+  if (inputVariables.length > 0) {
+    workflowEntry.inputVariables = inputVariables;
+  }
+  const frontmatterObj: Record<string, unknown> = {
+    name: result.name,
+    description: result.description || result.name,
+    workflows: [workflowEntry],
+  };
+  const skillContent = `---\n${stringifyYaml(frontmatterObj).trimEnd()}\n---\n\n${skillBody}\n`;
 
   // Build workflow file content
   const historyLine = buildHistoryEntry("Created", result.description || "", result.resolvedMentions);
@@ -531,6 +599,8 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       name: workflowName || "default",
       nodes: newNodes,
     }, currentWorkflowIndex);
+
+    await syncSkillInputVariables(plugin.app, workflowFile, newNodes);
   }, [plugin.app, workflowFile, workflowName, currentWorkflowIndex]);
 
   // Open browse all workflows modal
@@ -856,34 +926,34 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     const newName = result.name || skillName;
     const effectiveDescription = skillDescription.trim() || newName;
 
-    const yamlName = JSON.stringify(newName);
-    const yamlDesc = JSON.stringify(effectiveDescription);
-    // Rebuild the workflows frontmatter, preserving path / name / description per entry
-    // so skills that target a named block inside a shared file keep working.
-    const workflowsYaml = declaredWorkflows.length > 0
-      ? declaredWorkflows
-          .map(w => {
-            const path = typeof w.path === "string" ? w.path : "";
-            const namePart = typeof w.name === "string"
-              ? `\n    name: ${JSON.stringify(w.name)}`
-              : "";
-            const descPart = typeof w.description === "string"
-              ? `\n    description: ${JSON.stringify(w.description)}`
-              : "";
-            return `  - path: ${path}${namePart}${descPart}`;
-          })
-          .join("\n")
-      : `  - path: workflows/workflow.md\n    description: ${yamlName}`;
+    const derivedInputs = extractInputVariables(result.nodes);
+    const preservedWorkflows: Record<string, unknown>[] = declaredWorkflows.length > 0
+      ? declaredWorkflows.map((w, i) => {
+        if (i !== 0) return w;
+        // This save targets the first workflow entry — refresh its declared
+        // inputVariables to match the workflow we just wrote.
+        const next: Record<string, unknown> = { ...w };
+        if (derivedInputs.length > 0) {
+          next.inputVariables = derivedInputs;
+        } else {
+          delete next.inputVariables;
+        }
+        return next;
+      })
+      : [{
+        path: "workflows/workflow.md",
+        description: newName,
+        ...(derivedInputs.length > 0 ? { inputVariables: derivedInputs } : {}),
+      }];
 
-    const updatedSkillContent = `---
-name: ${yamlName}
-description: ${yamlDesc}
-workflows:
-${workflowsYaml}
----
+    const updatedFrontmatter: Record<string, unknown> = {
+      ...frontmatter,
+      name: newName,
+      description: effectiveDescription,
+      workflows: preservedWorkflows,
+    };
 
-${newInstructions}
-`;
+    const updatedSkillContent = `---\n${stringifyYaml(updatedFrontmatter).trimEnd()}\n---\n\n${newInstructions}\n`;
     await plugin.app.vault.modify(workflowFile, updatedSkillContent);
 
     // Write workflow YAML to the resolved block index (respects frontmatter's name field).

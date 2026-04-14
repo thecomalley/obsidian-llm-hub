@@ -47,6 +47,7 @@ import { getGeminiClient, isThinkingRequired } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
 import { getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
+import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
 import { PersistentCliSession } from "src/core/cliProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
@@ -90,7 +91,7 @@ import {
 } from "src/core/crypto";
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "src/utils/error";
-import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
+import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata } from "src/core/builtinSkills";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
 import { parseWorkflowFromMarkdown } from "src/workflow/parser";
@@ -1296,9 +1297,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			if (effectiveSkillPaths.length > 0) {
 				const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 				if (activeMetadata.length > 0) {
-					cliLoadedSkills = await Promise.all(
-						activeMetadata.map(m => loadSkill(plugin.app, m))
-					);
+					cliLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
 					const skillPrompt = buildSkillSystemPrompt(cliLoadedSkills, { cliMode: true });
 					if (skillPrompt) {
 						systemPrompt += skillPrompt;
@@ -1561,9 +1560,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			if (effectiveSkillPaths.length > 0) {
 				const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 				if (activeMetadata.length > 0) {
-					llmLoadedSkills = await Promise.all(
-						activeMetadata.map(m => loadSkill(plugin.app, m))
-					);
+					llmLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
 					const skillPrompt = buildSkillSystemPrompt(llmLoadedSkills, { cliMode: true });
 					if (skillPrompt) {
 						systemPrompt += skillPrompt;
@@ -1807,6 +1804,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			// Add JavaScript sandbox tool
 			tools.push(EXECUTE_JAVASCRIPT_TOOL);
+			tools.push(GET_WORKFLOW_SPEC_TOOL);
 
 			// Load skills for API provider mode
 			let apiLoadedSkills: LoadedSkill[] = [];
@@ -1818,7 +1816,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				if (effectiveSkillPaths.length > 0) {
 					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 					if (activeMetadata.length > 0) {
-						apiLoadedSkills = await Promise.all(activeMetadata.map(m => loadSkill(plugin.app, m)));
+						apiLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
 					}
 				}
 			}
@@ -1854,6 +1852,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 				if (name === "execute_javascript") {
 					return await handleExecuteJavascriptTool(args);
+				}
+				if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+					return handleGetWorkflowSpec(args, plugin);
 				}
 				return await obsidianToolExecutor(name, args);
 			};
@@ -2350,9 +2351,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				if (effectiveSkillPaths.length > 0) {
 					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 					if (activeMetadata.length > 0) {
-						loadedSkillsList = await Promise.all(
-							activeMetadata.map(m => loadSkill(plugin.app, m))
-						);
+						loadedSkillsList = activeMetadata.map(m => loadSkill(plugin.app, m));
 					}
 				}
 
@@ -2415,6 +2414,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// Add execute_javascript tool
 				if (toolsEnabled) {
 					tools.push(EXECUTE_JAVASCRIPT_TOOL);
+					tools.push(GET_WORKFLOW_SPEC_TOOL);
 				}
 
 				// Create context for tools (Obsidian tools only)
@@ -2479,6 +2479,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						// JavaScript sandbox tool
 						if (name === "execute_javascript") {
 							return await handleExecuteJavascriptTool(args);
+						}
+						if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+							return handleGetWorkflowSpec(args, plugin);
 						}
 						// Otherwise use Obsidian tool executor
 						if (obsidianToolExecutor) {
@@ -3455,6 +3458,30 @@ async function processSkillMarkers(
 
 	let processedContent = content;
 	const resultSections: string[] = [];
+
+	const readSkillMarkerRegex = /\[READ_SKILL:\s*(.+?)\]/g;
+	const readSkillMatches: RegExpExecArray[] = [];
+	let rsm: RegExpExecArray | null;
+	while ((rsm = readSkillMarkerRegex.exec(content)) !== null) {
+		readSkillMatches.push(rsm);
+	}
+	for (const match of readSkillMatches) {
+		if (signal?.aborted) return { processedContent, aborted: true };
+		const skillName = match[1].trim();
+		const skill = skills.find(s => s.name === skillName);
+		if (!skill) {
+			const available = skills.map(s => s.name).join(", ");
+			const errMsg = `Unknown skill: ${skillName}. Available: ${available}`;
+			processedContent = processedContent.replace(match[0], `**Skill read failed: ${skillName}** — ${errMsg}`);
+			resultSections.push(`Skill "${skillName}" read error:\n${errMsg}`);
+			continue;
+		}
+		const loaded = await readSkillBody(plugin.app, skill);
+		const body = loaded.instructions
+			+ (loaded.references.length > 0 ? `\n\n### References\n\n${loaded.references.join("\n\n")}` : "");
+		processedContent = processedContent.replace(match[0], `**Skill loaded: ${skillName}**`);
+		resultSections.push(`Skill "${skillName}" SKILL.md:\n${body}`);
+	}
 
 	const workflowMarkerRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\((\{[\s\S]*?\})\))?/g;
 	const skillWorkflowMap = collectSkillWorkflows(skills);
