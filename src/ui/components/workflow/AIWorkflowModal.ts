@@ -1887,23 +1887,30 @@ When the user shares code without explicit review requests, still offer brief ob
 
 ### 2. Workflow
 An executable workflow in YAML format that the skill provides as a tool.
-- Any variable you read via \`{{var}}\` without initializing (no preceding \`variable\` / \`set\` node and no \`saveTo\` target) becomes an **input variable**. The runtime extracts these automatically and writes them into SKILL.md frontmatter as \`workflows[0].inputVariables\`, so the chat LLM will see them when deciding what to pass to \`run_skill_workflow\`.
+- Any variable you read via \`{{var}}\` without initializing (no preceding \`variable\` / \`set\` node and no \`saveTo\` target) becomes an **input variable**. The runtime extracts these automatically and writes them into SKILL.md's \`skill-capabilities\` fenced YAML block as \`workflows[0].inputVariables\`, so the chat LLM will see them when deciding what to pass to \`run_skill_workflow\`.
 - Pick short, descriptive input variable names (e.g. \`filePath\`, \`query\`, \`mode\`). Avoid names starting with \`_\` — those are reserved for runtime-provided system variables.
 - Save meaningful results to named variables that the chat LLM can consume after \`run_skill_workflow\` returns.
 
-### Frontmatter (written for you)
-You do NOT need to emit SKILL.md frontmatter. The runtime constructs it from your output:
-\`\`\`yaml
+### SKILL.md layout (written for you)
+You do NOT need to emit SKILL.md frontmatter or the capability block. The runtime constructs them from your output:
+\`\`\`markdown
 ---
 name: <skill name>
 description: <skill description>
+---
+
+\`\`\`skill-capabilities
 workflows:
   - path: workflows/workflow.md
     description: <skill name>
     inputVariables: [<derived from your workflow YAML>]
----
 \`\`\`
-Just ensure the workflow's \`{{var}}\` usage is clean and unambiguous so the derived list is correct.
+
+<your SKILL.md instructions body goes here>
+\`\`\`
+- Frontmatter holds only user-facing metadata (name, description).
+- Workflow / script IDs and their input variables live in the \`skill-capabilities\` fenced YAML block. The runtime fills this in; you just need the workflow YAML's \`{{var}}\` usage to be clean and unambiguous so the derived \`inputVariables\` list is correct.
+- Your instructions prose should reference input variables by their exact name (so the LLM knows what to pass when invoking the workflow).
 `
       : "";
 

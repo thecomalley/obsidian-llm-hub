@@ -31,7 +31,7 @@ import { cryptoCache } from "src/core/cryptoCache";
 import { globalEventEmitter } from "src/utils/EventEmitter";
 import { formatError } from "src/utils/error";
 import { promptForPassword } from "src/ui/passwordPrompt";
-import { parseFrontmatter } from "src/core/skillsLoader";
+import { parseFrontmatter, extractCapabilitiesBlock, upsertCapabilitiesBlock, writeSkillMd } from "src/core/skillsLoader";
 
 interface WorkflowPanelProps {
   plugin: LlmHubPlugin;
@@ -379,8 +379,18 @@ async function syncSkillInputVariables(
 
   const content = await app.vault.read(skillFile);
   const { frontmatter, body } = parseFrontmatter(content);
-  const rawWorkflows = Array.isArray(frontmatter.workflows)
-    ? (frontmatter.workflows as Record<string, unknown>[])
+
+  // Capabilities live in the embedded fenced block; fall back to frontmatter
+  // for legacy skills, but migrate the result into the block on write.
+  const fromBlock = extractCapabilitiesBlock(body);
+  const fromFrontmatter = (Array.isArray(frontmatter.workflows) || Array.isArray(frontmatter.scripts))
+    ? { workflows: frontmatter.workflows, scripts: frontmatter.scripts }
+    : null;
+  const capabilities = fromBlock ?? fromFrontmatter;
+  if (!capabilities) return;
+
+  const rawWorkflows = Array.isArray(capabilities.workflows)
+    ? (capabilities.workflows as Record<string, unknown>[])
     : null;
   if (!rawWorkflows) return;
 
@@ -392,7 +402,8 @@ async function syncSkillInputVariables(
   const existingArr = Array.isArray(existing)
     ? (existing as unknown[]).filter((v): v is string => typeof v === "string")
     : [];
-  const changed = existingArr.length !== derivedInputs.length
+  const changed = !fromBlock
+    || existingArr.length !== derivedInputs.length
     || existingArr.some((v, i) => v !== derivedInputs[i]);
   if (!changed) return;
 
@@ -403,9 +414,13 @@ async function syncSkillInputVariables(
     delete nextEntry.inputVariables;
   }
   const nextWorkflows = rawWorkflows.map((w, i) => (i === targetIndex ? nextEntry : w));
-  const nextFrontmatter = { ...frontmatter, workflows: nextWorkflows };
-  const nextContent = `---\n${stringifyYaml(nextFrontmatter).trimEnd()}\n---\n\n${body.trimStart()}`;
-  await app.vault.modify(skillFile, nextContent);
+  const nextCapabilities: Record<string, unknown> = { ...capabilities, workflows: nextWorkflows };
+  const nextFrontmatter: Record<string, unknown> = { ...frontmatter };
+  delete nextFrontmatter.workflows;
+  delete nextFrontmatter.scripts;
+
+  const nextBody = upsertCapabilitiesBlock(body, nextCapabilities);
+  await app.vault.modify(skillFile, writeSkillMd(nextFrontmatter, nextBody));
 }
 
 // Create skill folder structure from AI workflow result
@@ -425,7 +440,7 @@ async function createSkillFromResult(
     }
   }
 
-  const skillBody = result.skillInstructions || result.description || "";
+  const skillProse = result.skillInstructions || result.description || "";
   const inputVariables = extractInputVariables(result.nodes);
   const workflowEntry: Record<string, unknown> = {
     path: "workflows/workflow.md",
@@ -437,9 +452,10 @@ async function createSkillFromResult(
   const frontmatterObj: Record<string, unknown> = {
     name: result.name,
     description: result.description || result.name,
-    workflows: [workflowEntry],
   };
-  const skillContent = `---\n${stringifyYaml(frontmatterObj).trimEnd()}\n---\n\n${skillBody}\n`;
+  const capabilities: Record<string, unknown> = { workflows: [workflowEntry] };
+  const body = upsertCapabilitiesBlock(skillProse, capabilities);
+  const skillContent = writeSkillMd(frontmatterObj, body);
 
   // Build workflow file content
   const historyLine = buildHistoryEntry("Created", result.description || "", result.resolvedMentions);
@@ -841,13 +857,21 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     const skillName = typeof frontmatter.name === "string" ? frontmatter.name : workflowFile.parent?.name || "skill";
     const skillDescription = typeof frontmatter.description === "string" ? frontmatter.description : "";
 
-    // Resolve the target workflow entry. Prefer frontmatter.workflows[0] (path + optional name)
-    // for correctness when the file contains multiple workflow blocks; fall back to the first
-    // .md file under workflows/ if frontmatter doesn't declare one.
+    // Capabilities (workflow / script list) live in the embedded
+    // `skill-capabilities` fenced block; fall back to frontmatter for legacy
+    // skills (the write path re-emits them into the block).
+    const capabilitiesBlock = extractCapabilitiesBlock(instructions);
     const folder = workflowFile.parent;
-    const declaredWorkflows = Array.isArray(frontmatter.workflows)
-      ? (frontmatter.workflows as Array<Record<string, unknown>>)
-      : [];
+    const declaredWorkflows: Array<Record<string, unknown>> = Array.isArray(capabilitiesBlock?.workflows)
+      ? (capabilitiesBlock.workflows as Array<Record<string, unknown>>)
+      : Array.isArray(frontmatter.workflows)
+        ? (frontmatter.workflows as Array<Record<string, unknown>>)
+        : [];
+    const declaredScripts: Array<Record<string, unknown>> = Array.isArray(capabilitiesBlock?.scripts)
+      ? (capabilitiesBlock.scripts as Array<Record<string, unknown>>)
+      : Array.isArray(frontmatter.scripts)
+        ? (frontmatter.scripts as Array<Record<string, unknown>>)
+        : [];
     const declaredFirst = declaredWorkflows[0];
     const declaredFirstPath = declaredFirst && typeof declaredFirst.path === "string"
       ? declaredFirst.path
@@ -905,6 +929,15 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       }
     }
 
+    // Modify flow presupposes an existing workflow. If the skill has neither a
+    // declared workflow nor a workflow file on disk (e.g. a script-only skill
+    // or an instructions-only skill), fabricating one here would silently add
+    // a workflow capability the author never declared.
+    if (declaredWorkflows.length === 0 && !workflowTargetFile && !currentYaml) {
+      new Notice(t("workflow.noWorkflowToModify"));
+      return;
+    }
+
     const result = await promptForAIWorkflow(
       plugin.app,
       plugin,
@@ -927,11 +960,18 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     const effectiveDescription = skillDescription.trim() || newName;
 
     const derivedInputs = extractInputVariables(result.nodes);
+    // If declaredWorkflows is empty we got here because a workflow was
+    // discovered on disk or inlined into SKILL.md itself (the empty-empty
+    // case returned early above). Use the actual target's path relative to
+    // the skill folder so the new capability entry points at the real file.
+    const fabricatedPath = workflowTargetFile && folder
+      ? workflowTargetFile.path.slice(folder.path.length + 1)
+      : currentYaml
+        ? "SKILL.md"
+        : null;
     const preservedWorkflows: Record<string, unknown>[] = declaredWorkflows.length > 0
       ? declaredWorkflows.map((w, i) => {
         if (i !== 0) return w;
-        // This save targets the first workflow entry — refresh its declared
-        // inputVariables to match the workflow we just wrote.
         const next: Record<string, unknown> = { ...w };
         if (derivedInputs.length > 0) {
           next.inputVariables = derivedInputs;
@@ -940,21 +980,29 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
         }
         return next;
       })
-      : [{
-        path: "workflows/workflow.md",
-        description: newName,
-        ...(derivedInputs.length > 0 ? { inputVariables: derivedInputs } : {}),
-      }];
+      : fabricatedPath
+        ? [{
+          path: fabricatedPath,
+          description: newName,
+          ...(derivedInputs.length > 0 ? { inputVariables: derivedInputs } : {}),
+        }]
+        : [];
+
+    const updatedCapabilities: Record<string, unknown> = { workflows: preservedWorkflows };
+    if (declaredScripts.length > 0) updatedCapabilities.scripts = declaredScripts;
 
     const updatedFrontmatter: Record<string, unknown> = {
       ...frontmatter,
       name: newName,
       description: effectiveDescription,
-      workflows: preservedWorkflows,
     };
+    // Strip legacy workflows/scripts from frontmatter on save; they now live
+    // exclusively in the embedded skill-capabilities block.
+    delete updatedFrontmatter.workflows;
+    delete updatedFrontmatter.scripts;
 
-    const updatedSkillContent = `---\n${stringifyYaml(updatedFrontmatter).trimEnd()}\n---\n\n${newInstructions}\n`;
-    await plugin.app.vault.modify(workflowFile, updatedSkillContent);
+    const updatedBody = upsertCapabilitiesBlock(newInstructions, updatedCapabilities);
+    await plugin.app.vault.modify(workflowFile, writeSkillMd(updatedFrontmatter, updatedBody));
 
     // Write workflow YAML to the resolved block index (respects frontmatter's name field).
     if (workflowTargetFile) {

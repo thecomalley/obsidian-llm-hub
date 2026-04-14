@@ -1,4 +1,4 @@
-import { type App, TFile, TFolder, parseYaml } from "obsidian";
+import { type App, TFile, TFolder, parseYaml, stringifyYaml } from "obsidian";
 import { SKILLS_FOLDER } from "src/types";
 import { getBuiltinSkillMetadata, isBuiltinSkillPath, loadBuiltinSkill } from "./builtinSkills";
 
@@ -35,20 +35,81 @@ function isValidSkillScriptPath(path: string): boolean {
   return !path.split("/").includes("..");
 }
 
+// Per-session dedup so legacy-format warnings don't spam on every chat mount.
+const WARNED_SKILL_PATHS = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (WARNED_SKILL_PATHS.has(key)) return;
+  WARNED_SKILL_PATHS.add(key);
+  console.warn(message);
+}
+
+const SKILL_CAPABILITIES_FENCE_TAG = "skill-capabilities";
+// Accept both `\n` and `\r\n` line endings so SKILL.md files authored on
+// Windows still resolve their capabilities block (parseFrontmatter already
+// tolerates CRLF; this needs to match).
+const CAPABILITIES_FENCE_RE = new RegExp(
+  `^\`\`\`${SKILL_CAPABILITIES_FENCE_TAG}[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n\`\`\`[ \\t]*$`,
+  "m",
+);
+
+/**
+ * Extract the embedded `skill-capabilities` YAML fence from SKILL.md's body.
+ * The fence is the single source of truth for a skill's workflow / script
+ * definitions; frontmatter holds only user-facing metadata (name, description).
+ * Returns null when the block is absent or not valid YAML.
+ */
+export function extractCapabilitiesBlock(body: string): Record<string, unknown> | null {
+  const match = body.match(CAPABILITIES_FENCE_RE);
+  if (!match) return null;
+  try {
+    const parsed = parseYaml(match[1]);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+/**
+ * Replace (or insert) the ```skill-capabilities fenced YAML block inside a
+ * SKILL.md body, preserving any prose around it. When no existing block is
+ * found the new one is prepended so the LLM sees capabilities before the
+ * instructions prose.
+ */
+export function upsertCapabilitiesBlock(body: string, capabilities: Record<string, unknown>): string {
+  const yamlContent = stringifyYaml(capabilities).trimEnd();
+  const newBlock = `\`\`\`${SKILL_CAPABILITIES_FENCE_TAG}\n${yamlContent}\n\`\`\``;
+  if (CAPABILITIES_FENCE_RE.test(body)) {
+    return body.replace(CAPABILITIES_FENCE_RE, newBlock);
+  }
+  const trimmed = body.replace(/^\s+/, "");
+  return trimmed ? `${newBlock}\n\n${trimmed}` : `${newBlock}\n`;
+}
+
+/** Serialize a SKILL.md file from frontmatter + body. */
+export function writeSkillMd(frontmatter: Record<string, unknown>, body: string): string {
+  return `---\n${stringifyYaml(frontmatter).trimEnd()}\n---\n\n${body.replace(/^\s+/, "")}`;
+}
+
 /**
  * Discover all skills: built-in skills + vault skills.
  *
- * SKILL.md frontmatter is the single source of truth for a skill's
- * capabilities. Auto-scanning `workflows/` and `scripts/` is NOT performed —
- * skill authors must declare each workflow/script explicitly in frontmatter so
- * the LLM and runtime agree on what exists. Missing paths or missing
- * inputVariables produce a console warning but do not drop the skill.
+ * For vault skills the single source of truth is the `skill-capabilities`
+ * fenced YAML block inside SKILL.md. Frontmatter carries only user-facing
+ * metadata (name, description). If a skill still declares `workflows:` /
+ * `scripts:` in frontmatter (legacy format), they are accepted for backward
+ * compatibility with a one-time console warning suggesting migration.
  *
- * Expected frontmatter:
- * ```yaml
+ * Expected layout:
+ * ```markdown
  * ---
  * name: my-skill
  * description: ...
+ * ---
+ *
+ * ```skill-capabilities
  * workflows:
  *   - path: workflows/do-x.md
  *     description: ...
@@ -56,7 +117,9 @@ function isValidSkillScriptPath(path: string): boolean {
  * scripts:
  *   - path: scripts/check.sh
  *     description: ...
- * ---
+ * ```
+ *
+ * <prose body>
  * ```
  */
 export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
@@ -74,11 +137,17 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
 
     try {
       const content = await app.vault.cachedRead(skillFile);
-      const { frontmatter } = parseFrontmatter(content);
+      const { frontmatter, body } = parseFrontmatter(content);
       const skillLabel = (frontmatter.name as string) || child.name;
 
+      let capabilities = extractCapabilitiesBlock(body);
+      if (!capabilities && (Array.isArray(frontmatter.workflows) || Array.isArray(frontmatter.scripts))) {
+        warnOnce(skillFilePath, `[skills] ${skillLabel}: declares workflows/scripts in frontmatter — please migrate to a \`\`\`skill-capabilities fenced block in SKILL.md body. Falling back to the frontmatter declaration for now.`);
+        capabilities = { workflows: frontmatter.workflows, scripts: frontmatter.scripts };
+      }
+
       const workflows: SkillWorkflowRef[] = [];
-      const rawWorkflows = frontmatter.workflows as Array<Record<string, unknown>> | undefined;
+      const rawWorkflows = (capabilities?.workflows ?? []) as Array<Record<string, unknown>>;
       if (Array.isArray(rawWorkflows)) {
         for (const wf of rawWorkflows) {
           if (!wf || typeof wf.path !== "string") {
@@ -105,7 +174,7 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
       }
 
       const scripts: SkillScriptRef[] = [];
-      const rawScripts = frontmatter.scripts as Array<Record<string, unknown>> | undefined;
+      const rawScripts = (capabilities?.scripts ?? []) as Array<Record<string, unknown>>;
       if (Array.isArray(rawScripts)) {
         for (const sc of rawScripts) {
           if (!sc || typeof sc.path !== "string") {
@@ -222,37 +291,43 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
       if (skill.references.length > 0) {
         section += `\n\n### References\n\n${skill.references.join("\n\n")}`;
       }
-    } else {
-      if (skill.description) {
-        section += `\n\n${skill.description}`;
-      }
-      sawLazyVaultSkill = true;
-      section += isCli
-        ? `\n\nFull instructions and references are lazy-loaded. Emit \`[READ_SKILL: ${skill.name}]\` on its own line (no backticks/code block) to receive the SKILL.md body and reference files as a follow-up user message, then continue.`
-        : `\n\nSKILL.md path: \`${skill.skillFilePath}\` — call \`read_note\` on this path to load the full instructions and reference materials before acting.`;
-    }
-
-    if (skill.workflows.length > 0) {
-      section += isCli
-        ? `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass.\n\nAfter you emit one or more markers, the system will execute each workflow and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further workflows or give the final answer. Available workflows:`
-        : `\n\n### Available Workflows\nUse the run_skill_workflow tool to execute these workflows:`;
-      for (const wf of skill.workflows) {
-        const id = buildWorkflowToolId(skill.name, wf);
-        section += `\n- \`${id}\`: ${wf.description}`;
-        if (wf.inputVariables && wf.inputVariables.length > 0) {
-          section += `\n  Input variables: ${wf.inputVariables.join(", ")}`;
+      if (skill.workflows.length > 0) {
+        section += isCli
+          ? `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass.\n\nAfter you emit one or more markers, the system will execute each workflow and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further workflows or give the final answer. Available workflows:`
+          : `\n\n### Available Workflows\nUse the run_skill_workflow tool to execute these workflows:`;
+        for (const wf of skill.workflows) {
+          const id = buildWorkflowToolId(skill.name, wf);
+          section += `\n- \`${id}\`: ${wf.description}`;
+          if (wf.inputVariables && wf.inputVariables.length > 0) {
+            section += `\n  Input variables: ${wf.inputVariables.join(", ")}`;
+          }
         }
       }
-    }
-    if (skill.scripts.length > 0) {
-      section += isCli
-        ? `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass.\n\nAfter you emit one or more markers, the system will execute each script and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further scripts or give the final answer. Available scripts (desktop only):`
-        : `\n\n### Available Scripts\nUse the run_skill_script tool to execute these scripts (desktop only):`;
-      for (const sc of skill.scripts) {
-        const id = buildScriptToolId(skill.name, sc);
-        section += `\n- \`${id}\`: ${sc.description}`;
+      if (skill.scripts.length > 0) {
+        section += isCli
+          ? `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass.\n\nAfter you emit one or more markers, the system will execute each script and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further scripts or give the final answer. Available scripts (desktop only):`
+          : `\n\n### Available Scripts\nUse the run_skill_script tool to execute these scripts (desktop only):`;
+        for (const sc of skill.scripts) {
+          const id = buildScriptToolId(skill.name, sc);
+          section += `\n- \`${id}\`: ${sc.description}`;
+        }
       }
+      return section;
     }
+
+    // Vault skill — minimal section. Everything (workflow / script IDs,
+    // descriptions, inputVariables, instructions, references) lives in
+    // SKILL.md and is discovered by the LLM when it reads the file. The LLM
+    // cannot construct a correct `run_skill_workflow` / `run_skill_script`
+    // call without reading SKILL.md first — both the IDs and the required
+    // inputVariables live in the embedded `skill-capabilities` block there.
+    if (skill.description) {
+      section += `\n\n${skill.description}`;
+    }
+    sawLazyVaultSkill = true;
+    section += isCli
+      ? `\n\nWorkflow / script IDs, their input variables, and full instructions all live in SKILL.md. Emit \`[READ_SKILL: ${skill.name}]\` on its own line (no backticks/code block) to receive the file as a follow-up user message, then invoke with the IDs you find.`
+      : `\n\nWorkflow / script IDs, their input variables, and full instructions all live in SKILL.md at \`${skill.skillFilePath}\`. Call \`read_note\` on that path before invoking this skill's tools.`;
     return section;
   });
 
@@ -261,8 +336,8 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
   ];
   if (sawLazyVaultSkill) {
     header.push(isCli
-      ? "For skills whose body is lazy-loaded, emit the `[READ_SKILL: skillName]` marker on its own line to load the full SKILL.md before acting; vault read tools are not available in this mode."
-      : "For skills that list a `SKILL.md path`, call `read_note` on that path to load the full instructions and references when you need them.");
+      ? "Vault skills show only their name and description here — their workflow / script list, input variables, and full instructions live in SKILL.md. Emit `[READ_SKILL: skillName]` on its own line to load it before invoking any of the skill's tools."
+      : "Vault skills show only their name and description here — their workflow / script list, input variables, and full instructions live in SKILL.md. Call `read_note` on the skill's SKILL.md path before invoking any of its tools. Built-in skills are fully inlined above.");
   }
   header.push("Pass any required input variables to a workflow via the `variables` parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.");
 

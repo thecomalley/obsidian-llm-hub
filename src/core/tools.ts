@@ -376,13 +376,13 @@ export function getEnabledTools(options: {
 export const skillWorkflowTool: ToolDefinition = {
   name: "run_skill_workflow",
   description:
-    "Run a workflow provided by an active agent skill. Workflows can execute commands, HTTP requests, file operations, and more. Specify the workflow ID from the active skills and optional input variables. If the workflow fails, do NOT retry automatically — report the error to the user instead.",
+    "Run a workflow provided by an active agent skill. Workflows can execute commands, HTTP requests, file operations, and more. For vault skills the workflow ID and its input variables are defined inside SKILL.md — you must read SKILL.md (via `read_note` or `[READ_SKILL: ...]`) before you can construct a correct call. If the workflow fails, do NOT retry automatically — report the error to the user instead.",
   parameters: {
     type: "object",
     properties: {
       workflowId: {
         type: "string",
-        description: "The workflow ID to run (format: skillName/workflowName, listed in skill description)",
+        description: "The workflow ID to run (format: skillName/workflowName, discovered from the skill's SKILL.md)",
       },
       variables: {
         type: "string",
@@ -396,13 +396,13 @@ export const skillWorkflowTool: ToolDefinition = {
 export const skillScriptTool: ToolDefinition = {
   name: "run_skill_script",
   description:
-    "Run a script provided by an active agent skill. Scripts execute shell commands on the local system (desktop only). Specify the script ID from the active skills and optional arguments.",
+    "Run a script provided by an active agent skill. Scripts execute shell commands on the local system (desktop only). For vault skills the script ID is defined inside SKILL.md — you must read SKILL.md (via `read_note` or `[READ_SKILL: ...]`) to discover it.",
   parameters: {
     type: "object",
     properties: {
       scriptId: {
         type: "string",
-        description: "The script ID to run (format: skillName/scriptName, listed in skill description)",
+        description: "The script ID to run (format: skillName/scriptName, discovered from the skill's SKILL.md)",
       },
       args: {
         type: "string",
