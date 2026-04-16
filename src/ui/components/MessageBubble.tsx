@@ -179,8 +179,6 @@ export default function MessageBubble({
     const args = toolCall.args;
     switch (toolCall.name) {
       case "read_note":
-      case "update_note":
-      case "delete_note":
       case "propose_edit":
       case "propose_delete": {
         if (typeof args.fileName === "string" && args.fileName) return args.fileName;
@@ -202,7 +200,6 @@ export default function MessageBubble({
       }
       case "rename_note": {
         if (typeof args.newPath === "string" && args.newPath) return args.newPath;
-        if (typeof args.new_path === "string" && args.new_path) return args.new_path;
         if (typeof args.oldPath === "string" && args.oldPath) return args.oldPath;
         return null;
       }
@@ -212,22 +209,6 @@ export default function MessageBubble({
       }
       default:
         return null;
-    }
-  };
-
-  // Try to open the note referenced by a tool call. Returns true if a note
-  // was opened; false if no note could be resolved (caller can fall back to
-  // showing the details toast).
-  const tryOpenToolNote = (toolCall: ToolCall): boolean => {
-    const target = getToolNoteTarget(toolCall, message.toolResults);
-    if (!target) return false;
-    // openLinkText resolves bare names against the vault, so it works both
-    // for full paths and for names like "My Note" or "My Note.md".
-    try {
-      void app.workspace.openLinkText(target, "", false);
-      return true;
-    } catch {
-      return false;
     }
   };
 
@@ -537,7 +518,11 @@ export default function MessageBubble({
                   <span
                     className="llm-hub-tool-indicator llm-hub-tool-clickable"
                     onClick={() => {
-                      if (!tryOpenToolNote(toolCall)) {
+                      if (noteTarget) {
+                        void app.workspace.openLinkText(noteTarget, "", false).catch(() => {
+                          new Notice(getToolDetail(toolCall), 3000);
+                        });
+                      } else {
                         new Notice(getToolDetail(toolCall), 3000);
                       }
                     }}
