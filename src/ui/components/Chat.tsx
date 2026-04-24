@@ -17,14 +17,15 @@ import Check from "lucide-react/dist/esm/icons/check";
 import type { LlmHubPlugin } from "src/plugin";
 import {
 	DEFAULT_CLI_CONFIG,
-	DEFAULT_LOCAL_LLM_CONFIG,
 	CLI_MODEL,
 	CLAUDE_CLI_MODEL,
 	CODEX_CLI_MODEL,
-	LOCAL_LLM_MODEL,
 	isApiProviderModel,
 	getApiProviderId,
 	getApiProviderModelName,
+	isLocalLlmModel,
+	getLocalLlmConfig,
+	localLlmDisplayName,
 	getGeminiApiKey,
 	type Message,
 	type ApiProviderConfig,
@@ -167,7 +168,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Vault tool mode: "all" = use all tools, "noSearch" = exclude search_notes/list_notes, "none" = no vault tools
 	// Gemma 4 + RAG/Web Search: must disable function calling tools (mutually exclusive)
 	const initialModel = plugin.getSelectedModel();
-	const isInitialCli = initialModel === "gemini-cli" || initialModel === "claude-cli" || initialModel === "codex-cli" || initialModel === "local-llm";
+	const isInitialCli = initialModel === "gemini-cli" || initialModel === "claude-cli" || initialModel === "codex-cli" || isLocalLlmModel(initialModel);
 	const initialGemma4Rag = initialModel.toLowerCase().includes("gemma-4")
 		&& plugin.workspaceState.selectedRagSetting != null;
 	const [vaultToolMode, setVaultToolMode] = useState<"all" | "noSearch" | "none">(
@@ -246,14 +247,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
 	const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
 	const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
-	const localLlmVerified = !Platform.isMobile && plugin.settings.localLlmVerified === true;
+	const activeLocalLlmConfigs = !Platform.isMobile
+		? (plugin.settings.localLlmConfigs ?? []).filter(c => c.verified && c.enabled !== false)
+		: [];
+	const localLlmVerified = activeLocalLlmConfigs.length > 0;
 	const enabledApiProviders = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
 	const hasEnabledApiProvider = enabledApiProviders.length > 0;
 	const anyCliVerified = geminiCliVerified || claudeCliVerified || codexCliVerified || localLlmVerified;
 	const isGeminiCliMode = !Platform.isMobile && currentModel === "gemini-cli";
 	const isClaudeCliMode = !Platform.isMobile && currentModel === "claude-cli";
 	const isCodexCliMode = !Platform.isMobile && currentModel === "codex-cli";
-	const isLocalLlmMode = !Platform.isMobile && currentModel === "local-llm";
+	const isLocalLlmMode = !Platform.isMobile && isLocalLlmModel(currentModel);
 	const isApiProviderMode = !Platform.isMobile && isApiProviderModel(currentModel);
 	const isCliMode = isGeminiCliMode || isClaudeCliMode || isCodexCliMode || isLocalLlmMode;
 
@@ -297,7 +301,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		...(geminiCliVerified ? [CLI_MODEL] : []),
 		...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
 		...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
-		...(localLlmVerified ? [LOCAL_LLM_MODEL] : []),
+		...activeLocalLlmConfigs.flatMap(c => {
+			const models = (c.enabledModels && c.enabledModels.length > 0)
+				? c.enabledModels
+				: (c.model ? [c.model] : []);
+			return models.map(m => ({
+				name: `local-llm:${c.id}:${m}` as ModelType,
+				displayName: localLlmDisplayName(c, m),
+				description: `Local LLM (${c.framework})`,
+				isCliModel: true,
+			}));
+		}),
 	];
 
 	useImperativeHandle(ref, () => ({
@@ -863,7 +877,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			persistentCliRef.current = null;
 		}
 
-		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli" || model === "local-llm";
+		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli" || isLocalLlmModel(model);
 		const isNewModelApiProvider = isApiProviderModel(model);
 
 		// Check if new model is a Gemini provider (for Web Search availability)
@@ -1512,7 +1526,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const sendMessageViaLocalLlm = async (content: string, attachments?: Attachment[], skillPath?: string) => {
 		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
-		const llmConfig = plugin.settings.localLlmConfig || DEFAULT_LOCAL_LLM_CONFIG;
+		const llmConfig = getLocalLlmConfig(currentModel, plugin.settings);
+		if (!llmConfig) {
+			new Notice(t("chat.localLlmNotConfigured"));
+			return;
+		}
 
 		// Activate skill if invoked via slash command
 		let effectiveSkillPaths = activeSkillPaths;
@@ -1557,7 +1575,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			sessionId: currentChatId ?? undefined,
 			input: localLlmContent,
 			metadata: {
-				model: `local-llm:${llmConfig.model}`,
+				model: `local-llm:${llmConfig.id}:${llmConfig.model}`,
 				isLocalLlm: true,
 				pluginVersion: plugin.manifest.version,
 			},
@@ -1697,7 +1715,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				role: "assistant",
 				content: processedContent,
 				timestamp: Date.now(),
-				model: "local-llm",
+				model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
 				...(fullThinking ? { thinking: fullThinking } : {}),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 			};
@@ -3389,6 +3407,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						onDiscardEdit={handleDiscardEdit}
 						alwaysThink={getThinkingToggle() === true}
 						app={plugin.app}
+						localLlmConfigs={plugin.settings.localLlmConfigs}
 					/>
 
 					<InputArea

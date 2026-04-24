@@ -4,11 +4,11 @@
 
 **無料・オープンソース**の Obsidian 向け AI アシスタント。**チャット**、**ワークフロー自動化**、**セマンティック検索（RAG）**を搭載。複数の LLM プロバイダーに対応 — ニーズに合った AI を自由に選択できます。
 
-> **任意の LLM プロバイダーを利用可能：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、ローカル LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)）、または CLI ツール（[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
+> **任意の LLM プロバイダーを利用可能：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、[OpenCode Zen / Go](https://opencode.ai)、ローカル LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)、[OpenCode](https://opencode.ai)）、または CLI ツール（[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
 
 ## 主な機能
 
-- **マルチプロバイダー LLM チャット** - Gemini、OpenAI、Anthropic、OpenRouter、Grok、ローカル LLM、CLI バックエンドに対応
+- **マルチプロバイダー LLM チャット** - Gemini、OpenAI、Anthropic、OpenRouter、Grok、OpenCode Zen/Go、ローカル LLM、CLI バックエンドに対応
 - **Vault 操作** - AI が Function Calling でノートの読み書き・検索・編集を実行（Gemini、OpenAI、Anthropic）
 - **ワークフロービルダー** - ビジュアルノードエディタと 25 種類のノードでマルチステップタスクを自動化
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
@@ -512,9 +512,16 @@ Obsidian のイベントでワークフローを自動実行：
 
 カスタムベース URL とモデルで任意の OpenAI 互換エンドポイントを設定可能。OpenRouter は様々なプロバイダーの数百のモデルにアクセスできます。
 
+### OpenCode Zen / Go
+
+OpenCode は同じアカウントから 2 種類のゲートウェイを提供しており、どちらもプロバイダードロップダウンから選択できます。
+
+- **OpenCode Zen** (`https://opencode.ai/zen`) — 都度課金。Big Pickle、MiniMax M2.5 Free など複数の無料モデルを含み、Claude・GPT-5.x など幅広いモデルを提供。`/v1/models` と `/v1/chat/completions` の OpenAI 互換 API を公開しているため、Verify 時にモデルが自動で一覧取得されます。
+- **OpenCode Go** (`https://opencode.ai/zen/go`) — 初月 $5、以降 $10/月のサブスクリプション。コーディング系（GLM、Kimi、DeepSeek、MiMo、MiniMax、Qwen）を厳選。`/v1/chat/completions` のみ公開のため、Verify 時はプラグイン同梱のモデルリストにフォールバックします。
+
 ### ローカル LLM
 
-Ollama、LM Studio、vLLM、AnythingLLM 経由でローカル実行中のモデルに接続。稼働中のサーバーからモデルが自動検出されます。
+Ollama、LM Studio、vLLM、AnythingLLM、または OpenCode ローカルサーバー経由でローカル実行中のモデルに接続。稼働中のサーバーからモデルが自動検出されます。
 
 ## インストール
 
@@ -553,6 +560,8 @@ npm run build
 | Anthropic | [console.anthropic.com](https://console.anthropic.com) |
 | OpenRouter | [openrouter.ai](https://openrouter.ai) |
 | Grok | [console.x.ai](https://console.x.ai) |
+| OpenCode Zen | [opencode.ai](https://opencode.ai) |
+| OpenCode Go | [opencode.ai](https://opencode.ai) |
 
 カスタム OpenAI 互換エンドポイントも追加できます。
 
@@ -562,12 +571,51 @@ npm run build
 
 ローカルで稼働中の LLM サーバーに接続：
 
-1. ローカルサーバーを起動（Ollama、LM Studio、vLLM、AnythingLLM）
+1. ローカルサーバーを起動（Ollama、LM Studio、vLLM、AnythingLLM、OpenCode）
 2. プラグイン設定でサーバー URL を入力
 3. 「Verify」をクリックして利用可能なモデルを検出
 
 > [!NOTE]
 > ローカル LLM は Function Calling（Vault ツール）に対応していません。ノート操作にはワークフローを使用してください。
+
+#### OpenCode ローカルサーバー
+
+OpenCode フレームワークは、ローカルで起動した `opencode serve` に接続します。OpenAI 互換の `/v1/chat/completions` ではなく OpenCode 独自の HTTP API を利用し、ストリーミングは `/global/event` SSE 経由で行います。
+
+##### macOS / Linux
+
+1. OpenCode CLI をインストール：
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+2. サーバーを起動：
+   ```bash
+   opencode serve
+   ```
+   既定で `http://localhost:4096` で待ち受けます。
+3. プラグイン設定 → **ローカル LLM** で **OpenCode (Local)** を選択し、URL は既定の `http://localhost:4096` のまま **Fetch models** をクリックすると、サーバーからプロバイダーとモデルの一覧を取得します。
+4. モデルは `<providerID>/<modelID>` 形式（例：`google/gemini-flash-lite-latest`）で表示されます。使うモデルを選んで保存してください。
+
+##### Windows（WSL）
+
+Windows では[公式ドキュメント](https://opencode.ai/docs/ja/windows-wsl)で **WSL 経由の利用が推奨**されています（ファイルシステム性能とツール互換性のため）。Obsidian は Windows ホスト側で動くので、サーバーを外部から到達できるアドレスにバインドし、**必ずパスワードで保護**してください。
+
+1. WSL をインストール（Microsoft の[公式ガイド](https://learn.microsoft.com/windows/wsl/install)）し、WSL ターミナルを開く。
+2. WSL 内で OpenCode をインストール：
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+3. パスワード付きで、すべてのインターフェースにバインドして起動：
+   ```bash
+   OPENCODE_SERVER_PASSWORD='your-password' opencode serve --hostname 0.0.0.0 --port 4096
+   ```
+   WSL2 は `localhost` を Windows ホストへ自動転送するため、Obsidian からは `http://localhost:4096` で接続できます。解決できない場合は WSL で `hostname -I` を実行し、表示された IP を使って `http://<wsl-ip>:4096` を指定してください。
+4. プラグイン設定 → **ローカル LLM** → **OpenCode (Local)** で：
+   - **Base URL**: `http://localhost:4096`（または WSL の IP）
+   - **Username**: `opencode`（既定値。`OPENCODE_SERVER_USERNAME` を設定した場合はその値）
+   - **Password**: `OPENCODE_SERVER_PASSWORD` に設定した値
+
+   **Fetch models** をクリックし、`<providerID>/<modelID>` 形式のモデルを選んで保存してください。
 
 ### CLI モード（Gemini / Claude / Codex）
 
