@@ -29,7 +29,9 @@ Assistente AI **gratuito e open-source** per Obsidian con **Chat**, **Automazion
 | **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ❌ | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **LLM Locale** (Ollama, LM Studio, vLLM) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **LLM Locale** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (fallback automatico) | ❌ | ❌ | ✅ |
+| **LLM Locale** (Ollama, OpenCode) | ✅ Streaming | ❌ (modalità marker) | ❌ | ❌ | ✅ |
 | **CLI** (Gemini, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]

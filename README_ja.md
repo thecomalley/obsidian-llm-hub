@@ -29,7 +29,9 @@
 | **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ❌ | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **ローカル LLM** (Ollama, LM Studio, vLLM) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **ローカル LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling（自動フォールバック） | ❌ | ❌ | ✅ |
+| **ローカル LLM** (Ollama, OpenCode) | ✅ Streaming | ❌（マーカーモード） | ❌ | ❌ | ✅ |
 | **CLI** (Gemini, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]

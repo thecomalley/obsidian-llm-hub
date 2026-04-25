@@ -29,7 +29,9 @@
 | **Anthropic** (API) | ✅ 流式传输 | ✅ Tool use | ❌ | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ 流式传输 | ✅ 函数调用 | ❌ | ❌ | ✅ |
 | **Grok** (API) | ✅ 流式传输 | ✅ 函数调用 | ❌ | ❌ | ✅ |
-| **本地 LLM** (Ollama, LM Studio, vLLM) | ✅ 流式传输 | ❌ | ❌ | ❌ | ✅ |
+| **OpenCode Zen / Go** (API) | ✅ 流式传输 | ✅ 函数调用 | ❌ | ❌ | ✅ |
+| **本地 LLM** (LM Studio, vLLM, AnythingLLM) | ✅ 流式传输 | ✅ 函数调用（自动回退） | ❌ | ❌ | ✅ |
+| **本地 LLM** (Ollama, OpenCode) | ✅ 流式传输 | ❌（标记模式） | ❌ | ❌ | ✅ |
 | **CLI** (Gemini, Claude, Codex) | ✅ 流式传输 | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]
