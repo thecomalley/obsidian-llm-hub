@@ -463,8 +463,8 @@ Los flujos de trabajo pueden activarse automáticamente por eventos de Obsidian:
 |--------|-------------|
 | Gemini 3.1 Pro Preview | Último modelo insignia, contexto 1M (recomendado) |
 | Gemini 3.1 Pro Preview (Custom Tools) | Optimizado para flujos de trabajo agénticos con herramientas personalizadas y bash |
-| Gemini 3 Flash Preview | Modelo rápido, contexto 1M, mejor relación costo-rendimiento |
-| Gemini 3.1 Flash Lite Preview | Modelo más rentable con alto rendimiento |
+| Gemini 3.5 Flash | Modelo rápido, contexto 1M, mejor relación costo-rendimiento |
+| Gemini 3.1 Flash Lite | Modelo más rentable con alto rendimiento |
 | Gemini 2.5 Flash | Modelo rápido, contexto 1M |
 | Gemini 2.5 Pro | Modelo Pro, contexto 1M |
 | Gemini 3 Pro (Image) | Generación de imágenes Pro, 4K |

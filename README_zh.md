@@ -463,8 +463,8 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 |-------|-------------|
 | Gemini 3.1 Pro Preview | 最新旗舰模型，1M 上下文（推荐） |
 | Gemini 3.1 Pro Preview (Custom Tools) | 针对自定义工具和 bash 的代理工作流优化 |
-| Gemini 3 Flash Preview | 快速模型，1M 上下文，最佳性价比 |
-| Gemini 3.1 Flash Lite Preview | 最具成本效益的高性能模型 |
+| Gemini 3.5 Flash | 快速模型，1M 上下文，最佳性价比 |
+| Gemini 3.1 Flash Lite | 最具成本效益的高性能模型 |
 | Gemini 2.5 Flash | 快速模型，1M 上下文 |
 | Gemini 2.5 Pro | Pro 模型，1M 上下文 |
 | Gemini 3 Pro (Image) | Pro 图像生成，4K |

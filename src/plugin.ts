@@ -18,6 +18,8 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_LOCAL_LLM_CONFIG,
   getGeminiApiKey,
+  normalizeDeprecatedGeminiModelName,
+  normalizeDeprecatedModelIdentifier,
 } from "src/types";
 import { initGeminiClient, resetGeminiClient, getGeminiClient } from "src/core/gemini";
 import { initLangfuse, resetLangfuse } from "src/tracing/langfuse";
@@ -117,6 +119,19 @@ function normaliseLocalLlmConfigs(loaded: Record<string, unknown>): LocalLlmConf
   }
 
   return [];
+}
+
+function normalizeModelSetting<T>(model: T): T {
+  return typeof model === "string"
+    ? normalizeDeprecatedModelIdentifier(model) as T
+    : model;
+}
+
+function normalizeModelList(models: unknown): string[] {
+  if (!Array.isArray(models)) return [];
+  return Array.from(new Set(models
+    .filter((model): model is string => typeof model === "string")
+    .map(normalizeDeprecatedGeminiModelName)));
 }
 
 export class LlmHubPlugin extends Plugin {
@@ -544,13 +559,17 @@ export class LlmHubPlugin extends Plugin {
       // Deep copy arrays to avoid mutating DEFAULT_SETTINGS
       // Use loaded commands if present, otherwise use default commands
       slashCommands: loaded.slashCommands
-        ? [...loaded.slashCommands]
+        ? (loaded.slashCommands as SlashCommand[]).map(cmd => ({
+            ...cmd,
+            model: normalizeModelSetting(cmd.model),
+          }))
         : [...DEFAULT_SETTINGS.slashCommands],
       // Deep copy API providers (ensure enabledModels exists)
       apiProviders: loaded.apiProviders
         ? (loaded.apiProviders as Record<string, unknown>[]).map(p => ({
             ...p,
-            enabledModels: (p.enabledModels as string[] | undefined) ?? [],
+            enabledModels: normalizeModelList(p.enabledModels),
+            availableModels: normalizeModelList(p.availableModels),
           }))
         : [],
       // Deep copy MCP servers (add default transport for backward compatibility)
@@ -593,8 +612,10 @@ export class LlmHubPlugin extends Plugin {
       discord: {
         ...DEFAULT_DISCORD_SETTINGS,
         ...(loaded.discord ?? {}),
+        model: normalizeModelSetting(loaded.discord?.model ?? DEFAULT_DISCORD_SETTINGS.model),
       },
     };
+    this.settings.lastAIWorkflowModel = normalizeModelSetting(this.settings.lastAIWorkflowModel);
   }
 
   async saveSettings() {
@@ -748,7 +769,7 @@ export class LlmHubPlugin extends Plugin {
     if (geminiApiKey) {
       // Use first available model from Gemini provider, or a reasonable default
       const geminiProvider = this.settings.apiProviders.find(p => p.type === "gemini" && p.enabled);
-      const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3-flash-preview";
+      const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3.5-flash";
       initGeminiClient(geminiApiKey, defaultModel as ModelType, this.settings.proxyUrl, this.settings.proxyBypass);
     }
     initLangfuse(this.settings.langfuse);

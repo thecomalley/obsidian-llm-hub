@@ -68,7 +68,7 @@ nodes:
 ```yaml
 - id: search
   type: command
-  model: gemini-3-flash-preview  # 可选：指定模型
+  model: gemini-3.5-flash  # 可选：指定模型
   ragSetting: __websearch__      # 可选：__websearch__、__none__ 或设置名称
   vaultTools: all                # 可选：all、noSearch、none
   mcpServers: "server1,server2"  # 可选：逗号分隔的 MCP 服务器名称
@@ -1188,7 +1188,7 @@ nodes:
     saveTo: input
   - id: search
     type: command
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     ragSetting: __websearch__
     prompt: |
       Search the web for: {{input.input}}

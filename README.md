@@ -466,8 +466,8 @@ Workflows can be automatically triggered by Obsidian events:
 |-------|-------------|
 | Gemini 3.1 Pro Preview | Latest flagship model, 1M context (recommended) |
 | Gemini 3.1 Pro Preview (Custom Tools) | Optimized for agentic workflows with custom tools and bash |
-| Gemini 3 Flash Preview | Fast model, 1M context, best cost-performance |
-| Gemini 3.1 Flash Lite Preview | Most cost-effective model with high performance |
+| Gemini 3.5 Flash | Fast model, 1M context, best cost-performance |
+| Gemini 3.1 Flash Lite | Most cost-effective model with high performance |
 | Gemini 2.5 Flash | Fast model, 1M context |
 | Gemini 2.5 Pro | Pro model, 1M context |
 | Gemini 3 Pro (Image) | Pro image generation, 4K |

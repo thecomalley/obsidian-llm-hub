@@ -463,8 +463,8 @@ Workflows können automatisch durch Obsidian-Ereignisse ausgelöst werden:
 |--------|--------------|
 | Gemini 3.1 Pro Preview | Neuestes Flaggschiff-Modell, 1M Kontext (empfohlen) |
 | Gemini 3.1 Pro Preview (Custom Tools) | Optimiert für agentische Workflows mit benutzerdefinierten Tools und Bash |
-| Gemini 3 Flash Preview | Schnelles Modell, 1M Kontext, bestes Preis-Leistungs-Verhältnis |
-| Gemini 3.1 Flash Lite Preview | Kostengünstigstes Modell mit hoher Leistung |
+| Gemini 3.5 Flash | Schnelles Modell, 1M Kontext, bestes Preis-Leistungs-Verhältnis |
+| Gemini 3.1 Flash Lite | Kostengünstigstes Modell mit hoher Leistung |
 | Gemini 2.5 Flash | Schnelles Modell, 1M Kontext |
 | Gemini 2.5 Pro | Pro-Modell, 1M Kontext |
 | Gemini 3 Pro (Image) | Pro-Bildgenerierung, 4K |

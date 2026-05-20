@@ -582,6 +582,23 @@ export function getApiProviderModelName(model: string): string {
   return colonIdx >= 0 ? rest.slice(colonIdx + 1) : "";
 }
 
+export function normalizeDeprecatedGeminiModelName(model: string): string {
+  if (model === "gemini-3-flash-preview") return "gemini-3.5-flash";
+  if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.1-flash-lite";
+  return model;
+}
+
+export function normalizeDeprecatedModelIdentifier(model: string): string {
+  if (!isApiProviderModel(model)) {
+    return normalizeDeprecatedGeminiModelName(model);
+  }
+
+  const providerId = getApiProviderId(model);
+  const providerModelName = getApiProviderModelName(model);
+  if (!providerModelName) return model;
+  return `api:${providerId}:${normalizeDeprecatedGeminiModelName(providerModelName)}`;
+}
+
 // Helper functions for local LLM model detection
 export function isLocalLlmModel(model: string): boolean {
   return model === "local-llm" || model.startsWith("local-llm:");

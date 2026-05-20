@@ -68,7 +68,7 @@ Fuehrt einen LLM-Prompt mit optionalen Modell-, Such-, Vault-Tools- und MCP-Eins
 ```yaml
 - id: search
   type: command
-  model: gemini-3-flash-preview  # Optional: spezifisches Modell
+  model: gemini-3.5-flash  # Optional: spezifisches Modell
   ragSetting: __websearch__      # Optional: __websearch__, __none__ oder Name der Einstellung
   vaultTools: all                # Optional: all, noSearch, none
   mcpServers: "server1,server2"  # Optional: kommagetrennte MCP-Servernamen
@@ -1188,7 +1188,7 @@ nodes:
     saveTo: input
   - id: search
     type: command
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     ragSetting: __websearch__
     prompt: |
       Search the web for: {{input.input}}

@@ -68,7 +68,7 @@ Executer un prompt LLM avec des parametres optionnels de modele, recherche, outi
 ```yaml
 - id: search
   type: command
-  model: gemini-3-flash-preview  # Optionnel: modele specifique
+  model: gemini-3.5-flash  # Optionnel: modele specifique
   ragSetting: __websearch__      # Optionnel: __websearch__, __none__, ou nom de parametre
   vaultTools: all                # Optionnel: all, noSearch, none
   mcpServers: "server1,server2"  # Optionnel: noms de serveurs MCP separes par virgules
@@ -1188,7 +1188,7 @@ nodes:
     saveTo: input
   - id: search
     type: command
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     ragSetting: __websearch__
     prompt: |
       Search the web for: {{input.input}}

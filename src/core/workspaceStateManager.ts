@@ -14,6 +14,7 @@ import {
   isLocalLlmModel,
   getLocalLlmId,
   getLocalLlmModelName,
+  normalizeDeprecatedModelIdentifier,
 } from "../types";
 import { formatError } from "../utils/error";
 
@@ -83,6 +84,9 @@ export class WorkspaceStateManager {
     const content = await this.app.vault.adapter.read(filePath);
     const loaded = JSON.parse(content) as Partial<WorkspaceState>;
     this.workspaceState = { ...DEFAULT_WORKSPACE_STATE, ragSettings: {}, ...loaded };
+    if (this.workspaceState.selectedModel) {
+      this.workspaceState.selectedModel = normalizeDeprecatedModelIdentifier(this.workspaceState.selectedModel) as ModelType;
+    }
 
     // Ensure each RAG setting has all required fields (migration for new fields)
     for (const [settingName, setting] of Object.entries(this.workspaceState.ragSettings)) {

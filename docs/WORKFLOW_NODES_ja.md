@@ -68,7 +68,7 @@ nodes:
 ```yaml
 - id: search
   type: command
-  model: gemini-3-flash-preview  # 任意: 特定のモデル
+  model: gemini-3.5-flash  # 任意: 特定のモデル
   ragSetting: __websearch__      # 任意: __websearch__, __none__, または設定名
   vaultTools: all                # 任意: all, noSearch, none
   mcpServers: "server1,server2"  # 任意: カンマ区切りの MCP サーバー名
@@ -1190,7 +1190,7 @@ nodes:
     saveTo: input
   - id: search
     type: command
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     ragSetting: __websearch__
     prompt: |
       以下のトピックについて Web 検索して: {{input.input}}

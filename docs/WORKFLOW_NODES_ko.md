@@ -68,7 +68,7 @@ nodes:
 ```yaml
 - id: search
   type: command
-  model: gemini-3-flash-preview  # 선택 사항: 특정 모델
+  model: gemini-3.5-flash  # 선택 사항: 특정 모델
   ragSetting: __websearch__      # 선택 사항: __websearch__, __none__, 또는 설정 이름
   vaultTools: all                # 선택 사항: all, noSearch, none
   mcpServers: "server1,server2"  # 선택 사항: 쉼표로 구분된 MCP 서버 이름
@@ -1188,7 +1188,7 @@ nodes:
     saveTo: input
   - id: search
     type: command
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     ragSetting: __websearch__
     prompt: |
       Search the web for: {{input.input}}
