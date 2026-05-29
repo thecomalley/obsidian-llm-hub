@@ -684,12 +684,7 @@ export class AntigravityCliProvider extends BaseCliProvider {
     const fs = getNodeModule<typeof import("fs")>("fs");
     const os = getNodeModule<typeof import("os")>("os");
     const path = getNodeModule<typeof import("path")>("path");
-    const workspaceTmpRoot = path.join(workingDirectory, ".obsidian", "plugins", "llm-hub", ".tmp");
-    const tmpRoot = fs.existsSync(path.dirname(workspaceTmpRoot))
-      ? workspaceTmpRoot
-      : os.tmpdir();
-    fs.mkdirSync(tmpRoot, { recursive: true });
-    const tmpDir = fs.mkdtempSync(path.join(tmpRoot, "agy-cmd-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-cmd-"));
     const answerPath = path.join(tmpDir, "answer.txt");
     const wrapperPath = path.join(tmpDir, "run.cmd");
     const promptPath = path.join(tmpDir, "prompt.txt");
