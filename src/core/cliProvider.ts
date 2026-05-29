@@ -35,13 +35,17 @@ type ResolvedCommand = { command: string; args: string[]; shell: boolean };
  * Load child_process on desktop only.
  */
 export function getChildProcess(): typeof import("child_process") {
+  return getNodeModule<typeof import("child_process")>("child_process");
+}
+
+function getNodeModule<T>(id: string): T {
   const loader =
     (globalThis as unknown as { require?: (id: string) => unknown }).require ||
     (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
   if (!loader) {
-    throw new Error("child_process is not available in this environment");
+    throw new Error(`${id} is not available in this environment`);
   }
-  return loader("child_process") as typeof import("child_process");
+  return loader(id) as T;
 }
 
 /**
@@ -176,8 +180,17 @@ function resolveAntigravityCommand(args: string[], customPath?: string): Resolve
   }
 
   if (isWindows()) {
-    // Fallback: rely on PATH via cmd.exe so `agy.exe` / wrappers still work.
-    // cmd.exe interpretation of arg metacharacters is a known tradeoff — see header comment.
+    if (typeof process !== "undefined") {
+      const localAppdata = process.env?.LOCALAPPDATA;
+      if (localAppdata) {
+        const exePath = `${localAppdata}\\agy\\bin\\agy.exe`;
+        if (fileExistsSync(exePath)) {
+          return { command: exePath, args, shell: false };
+        }
+      }
+    }
+    // Fallback: rely on PATH via cmd.exe so wrappers still work when the
+    // standalone exe is not in the default install location.
     return { command: "agy", args, shell: true };
   }
 
@@ -592,12 +605,22 @@ export class AntigravityCliProvider extends BaseCliProvider {
     }
 
     const { command, args, shell } = resolveAntigravityCommand(cliArgs, this.customPath);
+
+    if (isWindows()) {
+      yield* this.runWithFileOutput(command, args, shell, workingDirectory, signal);
+      return;
+    }
+
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell,
       cwd: workingDirectory,
       env: typeof process !== "undefined" ? process.env : undefined,
     });
+
+    // Antigravity print mode receives the prompt via argv, not stdin. Closing
+    // stdin prevents the child from waiting for additional input on some shells.
+    proc.stdin?.end();
 
     // Handle abort
     if (signal) {
@@ -609,38 +632,181 @@ export class AntigravityCliProvider extends BaseCliProvider {
     yield* this.processOutput(proc);
   }
 
+  private async *runWithFileOutput(
+    command: string,
+    args: string[],
+    shell: boolean,
+    workingDirectory: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    void shell;
+    const result = await this.runWithCmdRedirect(command, args, workingDirectory, signal);
+
+    if (signal?.aborted) {
+      throw new Error("Antigravity CLI session aborted");
+    }
+    if (result.error) {
+      yield { type: "error", error: result.error.message };
+    } else if (result.code !== 0) {
+      yield { type: "error", error: result.stderr.trim() || `Antigravity CLI exited with code ${result.code}` };
+    } else if (result.stdout) {
+      yield { type: "text", content: result.stdout };
+    } else {
+      const diagnostics = result.stderr.trim();
+      yield {
+        type: "error",
+        error: diagnostics
+          ? `Antigravity CLI returned no response. Diagnostics:\n${diagnostics}`
+          : "Antigravity CLI returned no response.",
+      };
+    }
+
+    yield { type: "done" };
+  }
+
+  private quoteCmdArg(value: string): string {
+    // cmd.exe parses redirection reliably for agy.exe, but its command string
+    // cannot safely contain raw newlines, quotes, or %ENV% patterns.
+    const normalized = value
+      .replace(/\r?\n/g, " ")
+      .replace(/%/g, "^%")
+      .replace(/"/g, '""');
+    return `"${normalized}"`;
+  }
+
+  private async runWithCmdRedirect(
+    command: string,
+    args: string[],
+    workingDirectory: string,
+    signal?: AbortSignal
+  ): Promise<{ code: number | null; stdout: string; stderr: string; error: Error | null }> {
+    const { spawn } = getChildProcess();
+    const fs = getNodeModule<typeof import("fs")>("fs");
+    const os = getNodeModule<typeof import("os")>("os");
+    const path = getNodeModule<typeof import("path")>("path");
+    const workspaceTmpRoot = path.join(workingDirectory, ".obsidian", "plugins", "llm-hub", ".tmp");
+    const tmpRoot = fs.existsSync(path.dirname(workspaceTmpRoot))
+      ? workspaceTmpRoot
+      : os.tmpdir();
+    fs.mkdirSync(tmpRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(tmpRoot, "agy-cmd-"));
+    const answerPath = path.join(tmpDir, "answer.txt");
+    const wrapperPath = path.join(tmpDir, "run.cmd");
+    const promptPath = path.join(tmpDir, "prompt.txt");
+    const cmdArgs = [...args];
+    const promptIndex = cmdArgs.length - 1;
+    if (promptIndex >= 0 && cmdArgs[promptIndex]) {
+      fs.writeFileSync(promptPath, cmdArgs[promptIndex], "utf8");
+      cmdArgs[promptIndex] = [
+        "Read the full prompt from",
+        `@${promptPath}`,
+        "and answer the user's latest request.",
+        "For transport back to Obsidian, write only your final answer to this exact file path:",
+        answerPath,
+        "Do not summarize or describe the prompt file.",
+        "Do not write any other files.",
+      ].join(" ");
+    }
+    const agyCommandLine = [
+      this.quoteCmdArg(command),
+      ...cmdArgs.map(arg => this.quoteCmdArg(arg)),
+    ].join(" ");
+    fs.writeFileSync(wrapperPath, `@echo off\r\n${agyCommandLine}\r\nexit /b %ERRORLEVEL%\r\n`, "utf8");
+
+    let proc: ChildProcessType | null = null;
+    let spawnError: Error | null = null;
+    let wrapperStdout = "";
+    let wrapperStderr = "";
+    const procEnv = typeof process !== "undefined" ? { ...process.env } : undefined;
+    if (procEnv) {
+      delete procEnv.ELECTRON_RUN_AS_NODE;
+    }
+
+    proc = spawn("cmd.exe", ["/d", "/c", wrapperPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
+      cwd: workingDirectory,
+      env: procEnv,
+    });
+    proc.stdout?.setEncoding("utf8");
+    proc.stderr?.setEncoding("utf8");
+    proc.stdout?.on("data", (data: string) => {
+      wrapperStdout += data;
+    });
+    proc.stderr?.on("data", (data: string) => {
+      wrapperStderr += data;
+    });
+
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        proc?.kill("SIGTERM");
+      }, { once: true });
+    }
+
+    const code = await new Promise<number | null>((resolve) => {
+      proc?.on("close", (closeCode: number | null) => resolve(closeCode));
+      proc?.on("error", (err: Error) => {
+        spawnError = err;
+        resolve(null);
+      });
+    });
+
+    const stdout = fs.existsSync(answerPath) ? fs.readFileSync(answerPath, "utf8") : "";
+    const stderrParts = [
+      wrapperStderr,
+      wrapperStdout,
+    ].filter(Boolean);
+    const stderr = stderrParts.join("\n");
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup only.
+    }
+    return { code, stdout, stderr, error: spawnError };
+  }
+
   private async *processOutput(proc: ChildProcessType): AsyncGenerator<StreamChunk> {
+    let stderr = "";
+    let sawStdout = false;
+
+    // Drain stderr concurrently. Antigravity can emit verbose diagnostic logs;
+    // if nobody reads stderr, the child can block before stdout closes.
+    proc.stderr?.setEncoding("utf8");
+    proc.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    const closePromise = new Promise<number | null>((resolve, reject) => {
+      proc.on("close", (code: number | null) => resolve(code));
+      proc.on("error", reject);
+    });
+
     // Process stdout
     if (proc.stdout) {
       proc.stdout.setEncoding("utf8");
 
       for await (const chunk of proc.stdout) {
+        if (String(chunk).length > 0) {
+          sawStdout = true;
+        }
         yield { type: "text", content: chunk };
       }
     }
 
     // Wait for process to complete
-    await new Promise<void>((resolve, reject) => {
-      proc.on("close", (code: number | null) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Antigravity CLI exited with code ${code}`));
-        }
-      });
-      proc.on("error", reject);
-    });
-
-    // Check for errors in stderr
-    if (proc.stderr) {
-      let stderr = "";
-      proc.stderr.setEncoding("utf8");
-      for await (const chunk of proc.stderr) {
-        stderr += chunk;
-      }
-      if (stderr) {
-        yield { type: "error", error: stderr };
-      }
+    const code = await closePromise;
+    if (code !== 0) {
+      const message = stderr.trim() || `Antigravity CLI exited with code ${code}`;
+      yield { type: "error", error: message };
+    } else if (!sawStdout) {
+      const diagnostics = stderr.trim();
+      yield {
+        type: "error",
+        error: diagnostics
+          ? `Antigravity CLI returned no response. Diagnostics:\n${diagnostics}`
+          : "Antigravity CLI returned no response.",
+      };
     }
 
     yield { type: "done" };
