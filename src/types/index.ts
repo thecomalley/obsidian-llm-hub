@@ -505,7 +505,9 @@ export function localLlmDisplayName(config: LocalLlmConfig, modelOverride?: stri
 export type ChatProvider = "api" | "antigravity-cli" | "claude-cli" | "codex-cli" | "local-llm" | "api-provider";  // "api-provider" kept for legacy; new code uses isApiProviderModel()
 
 // API provider types for multi-provider support
-export type ApiProviderType = "gemini" | "openai" | "anthropic" | "openrouter" | "grok" | "opencodego" | "opencodezen" | "custom";
+export type ApiProviderType = "gemini" | "openai" | "azure" | "anthropic" | "openrouter" | "grok" | "opencodego" | "opencodezen" | "custom";
+
+export const DEFAULT_AZURE_API_VERSION = "2024-10-21";
 
 export interface ApiProviderConfig {
   id: string;
@@ -513,6 +515,8 @@ export interface ApiProviderConfig {
   type: ApiProviderType;
   baseUrl: string;
   apiKey: string;
+  azureApiVersion?: string;
+  azureDeployments?: string[];
   enabledModels: string[];       // Models the user has checked for use
   availableModels: string[];
   verified: boolean;
@@ -522,6 +526,7 @@ export interface ApiProviderConfig {
 export const KNOWN_PROVIDER_DEFAULTS: Record<string, { baseUrl: string; displayName: string }> = {
   gemini: { baseUrl: "https://generativelanguage.googleapis.com", displayName: "Gemini" },
   openai: { baseUrl: "https://api.openai.com", displayName: "OpenAI" },
+  azure: { baseUrl: "", displayName: "Azure OpenAI" },
   anthropic: { baseUrl: "https://api.anthropic.com", displayName: "Anthropic" },
   openrouter: { baseUrl: "https://openrouter.ai/api", displayName: "OpenRouter" },
   grok: { baseUrl: "https://api.x.ai", displayName: "Grok" },

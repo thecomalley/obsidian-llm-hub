@@ -10,8 +10,9 @@
  */
 
 import { requestUrl } from "obsidian";
-import OpenAI from "openai";
-import type { Message, StreamChunk, ToolDefinition, GeneratedImage } from "../types";
+import OpenAI, { AzureOpenAI } from "openai";
+import type { ApiProviderConfig, Message, StreamChunk, ToolDefinition, GeneratedImage } from "../types";
+import { DEFAULT_AZURE_API_VERSION } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
@@ -39,6 +40,8 @@ function buildSdkFetch(proxyUrl?: string, proxyBypass?: string): typeof fetch | 
 
 /** DALL-E model name patterns */
 const DALLE_PATTERN = /^dall-e/i;
+
+type OpenAiCompatibleProviderConfig = Pick<ApiProviderConfig, "type" | "azureApiVersion">;
 
 /** Check if a model name is a DALL-E image generation model */
 export function isOpenAiImageModel(model: string): boolean {
@@ -167,8 +170,105 @@ export async function verifyApiProvider(
   }
 }
 
-function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyBypass?: string): OpenAI {
+export async function verifyAzureOpenAiProvider(
+  endpoint: string,
+  apiKey: string,
+  apiVersion: string,
+  deployments: string[],
+  proxyUrl?: string,
+  proxyBypass?: string,
+): Promise<{ success: boolean; error?: string; models?: string[] }> {
+  const normalizedEndpoint = typeof endpoint === "string" ? endpoint.trim().replace(/\/+$/, "") : "";
+  const normalizedApiVersion = typeof apiVersion === "string" && apiVersion.trim()
+    ? apiVersion.trim()
+    : DEFAULT_AZURE_API_VERSION;
+  const normalizedDeployments = Array.from(new Set(
+    deployments.map(d => d.trim()).filter(Boolean)
+  ));
+
+  if (!normalizedEndpoint) {
+    return { success: false, error: "Azure endpoint required" };
+  }
+  if (!apiKey) {
+    return { success: false, error: "API key required" };
+  }
+  if (normalizedDeployments.length === 0) {
+    return { success: false, error: "At least one deployment name is required" };
+  }
+
+  const deployment = normalizedDeployments[0];
+  const url = `${normalizedEndpoint}/openai/deployments/${encodeURIComponent(deployment)}/chat/completions?api-version=${encodeURIComponent(normalizedApiVersion)}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "api-key": apiKey,
+  };
+  const body = JSON.stringify({
+    messages: [{ role: "user", content: "ping" }],
+    max_tokens: 1,
+  });
+
+  const extractDetail = (text: string | undefined): string => {
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: string } };
+      return parsed.error?.message ?? "";
+    } catch {
+      return text.trim().slice(0, 200);
+    }
+  };
+
+  try {
+    if (proxyUrl) {
+      const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
+      const response = await proxyFetch(url, { method: "POST", headers, body });
+      const text = await response.text().catch(() => "");
+      if (!response.ok) {
+        const detail = extractDetail(text);
+        return {
+          success: false,
+          error: detail
+            ? `HTTP ${response.status} ${response.statusText}: ${detail}`
+            : `HTTP ${response.status} ${response.statusText}`,
+        };
+      }
+      return { success: true, models: normalizedDeployments };
+    }
+    const response = await requestUrl({ url, method: "POST", headers, body, throw: false });
+    if (response.status < 200 || response.status >= 300) {
+      const detail = extractDetail(response.text);
+      return {
+        success: false,
+        error: detail
+          ? `HTTP ${response.status}: ${detail}`
+          : `HTTP ${response.status}`,
+      };
+    }
+    return { success: true, models: normalizedDeployments };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Cannot reach ${normalizedEndpoint}: ${message}` };
+  }
+}
+
+function createClient(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+  providerConfig?: OpenAiCompatibleProviderConfig,
+): OpenAI {
   const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
+  if (providerConfig?.type === "azure") {
+    return new AzureOpenAI({
+      apiKey,
+      endpoint: baseUrl.replace(/\/+$/, ""),
+      deployment: model,
+      apiVersion: providerConfig.azureApiVersion?.trim() || DEFAULT_AZURE_API_VERSION,
+      dangerouslyAllowBrowser: true,
+      ...(sdkFetch ? { fetch: sdkFetch } : {}),
+    });
+  }
   return new OpenAI({
     apiKey,
     baseURL: `${baseUrl.replace(/\/+$/, "")}/v1`,
@@ -263,7 +363,7 @@ export async function* openaiGenerateImageStream(
   proxyUrl?: string,
   proxyBypass?: string,
 ): AsyncGenerator<StreamChunk> {
-  const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
+  const client = createClient(baseUrl, apiKey, model, proxyUrl, proxyBypass);
 
   try {
     const response = await client.images.generate({
@@ -448,8 +548,9 @@ export async function* openaiChatWithToolsStream(
   enableThinking?: boolean,
   proxyUrl?: string,
   proxyBypass?: string,
+  providerConfig?: OpenAiCompatibleProviderConfig,
 ): AsyncGenerator<StreamChunk> {
-  const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
+  const client = createClient(baseUrl, apiKey, model, proxyUrl, proxyBypass, providerConfig);
   const useReasoning = enableThinking === true;
 
   // Responses API is only available on OpenAI's official API, not on compatible providers (OpenRouter, etc.)

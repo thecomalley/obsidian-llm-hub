@@ -91,7 +91,7 @@ export const it: Record<string, string> = {
 
   // Settings - Provider API
   "settings.apiProviders": "Provider API",
-  "settings.apiProviders.desc": "Connettiti a provider API compatibili con OpenAI (OpenAI, OpenRouter, Grok, ecc.)",
+  "settings.apiProviders.desc": "Connettiti a provider API (OpenAI, Azure OpenAI, OpenRouter, Grok, ecc.)",
   "settings.apiProviderAdd": "Aggiungi provider",
   "settings.apiProviderEdit": "Modifica provider",
   "settings.apiProviderDelete": "Elimina provider",
@@ -102,6 +102,14 @@ export const it: Record<string, string> = {
   "settings.apiProviderName": "Nome visualizzato",
   "settings.apiProviderBaseUrl": "URL base",
   "settings.apiProviderApiKey": "Chiave API",
+  "settings.azureProviderEndpoint": "Endpoint Azure",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Chiave API Azure",
+  "settings.azureProviderApiVersion": "Versione API",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Deployment",
+  "settings.azureProviderDeployments.desc": "Inserisci un nome di deployment per riga. Dopo la verifica, tutti i deployment configurati diventano modelli selezionabili.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "URL proxy",
   "settings.proxyUrl.desc": "Proxy HTTP(S) per gateway aziendali (es. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const it: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "Verifica fallita: {{error}}",
   "settings.apiProviderNameRequired": "Il nome del provider è obbligatorio",
   "settings.apiProviderApiKeyRequired": "La chiave API è obbligatoria",
+  "settings.azureProviderEndpointRequired": "L'endpoint Azure è obbligatorio",
+  "settings.azureProviderApiVersionRequired": "La versione API è obbligatoria",
+  "settings.azureProviderDeploymentsRequired": "È richiesto almeno un nome di deployment",
   "settings.apiProviderVerifyRequired": "Per favore, verifica prima la connessione",
   "chat.noApiProvider": "Nessun provider API configurato. Aggiungi e verifica un provider nelle impostazioni.",
 

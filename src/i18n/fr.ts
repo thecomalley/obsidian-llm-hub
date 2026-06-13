@@ -91,7 +91,7 @@ export const fr: Record<string, string> = {
 
   // Settings - API Providers
   "settings.apiProviders": "Fournisseurs d'API",
-  "settings.apiProviders.desc": "Connectez-vous à des fournisseurs d'API compatibles OpenAI (OpenAI, OpenRouter, Grok, etc.)",
+  "settings.apiProviders.desc": "Connectez-vous à des fournisseurs d'API (OpenAI, Azure OpenAI, OpenRouter, Grok, etc.)",
   "settings.apiProviderAdd": "Ajouter un fournisseur",
   "settings.apiProviderEdit": "Modifier le fournisseur",
   "settings.apiProviderDelete": "Supprimer le fournisseur",
@@ -102,6 +102,14 @@ export const fr: Record<string, string> = {
   "settings.apiProviderName": "Nom d'affichage",
   "settings.apiProviderBaseUrl": "URL de base",
   "settings.apiProviderApiKey": "Clé API",
+  "settings.azureProviderEndpoint": "Point de terminaison Azure",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Clé API Azure",
+  "settings.azureProviderApiVersion": "Version d'API",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Déploiements",
+  "settings.azureProviderDeployments.desc": "Entrez un nom de déploiement par ligne. Après vérification, tous les déploiements configurés deviennent des modèles sélectionnables.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "URL du proxy",
   "settings.proxyUrl.desc": "Proxy HTTP(S) pour passerelles d'entreprise (ex. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const fr: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "Échec de la vérification : {{error}}",
   "settings.apiProviderNameRequired": "Le nom du fournisseur est requis",
   "settings.apiProviderApiKeyRequired": "La clé API est requise",
+  "settings.azureProviderEndpointRequired": "Le point de terminaison Azure est requis",
+  "settings.azureProviderApiVersionRequired": "La version d'API est requise",
+  "settings.azureProviderDeploymentsRequired": "Au moins un nom de déploiement est requis",
   "settings.apiProviderVerifyRequired": "Veuillez d'abord vérifier la connexion",
   "chat.noApiProvider": "Aucun fournisseur d'API configuré. Veuillez ajouter et vérifier un fournisseur dans les paramètres.",
 

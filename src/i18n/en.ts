@@ -91,7 +91,7 @@ export const en = {
 
   // Settings - API Providers
   "settings.apiProviders": "API providers",
-  "settings.apiProviders.desc": "Connect to OpenAI-compatible API providers (OpenAI, OpenRouter, Grok, etc.)",
+  "settings.apiProviders.desc": "Connect to API providers (OpenAI, Azure OpenAI, OpenRouter, Grok, etc.)",
   "settings.apiProviderAdd": "Add provider",
   "settings.apiProviderEdit": "Edit provider",
   "settings.apiProviderDelete": "Delete provider",
@@ -102,6 +102,14 @@ export const en = {
   "settings.apiProviderName": "Display name",
   "settings.apiProviderBaseUrl": "Base URL",
   "settings.apiProviderApiKey": "API key",
+  "settings.azureProviderEndpoint": "Azure endpoint",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Azure API key",
+  "settings.azureProviderApiVersion": "API version",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Deployments",
+  "settings.azureProviderDeployments.desc": "Enter one deployment name per line. All configured deployments become selectable models after verification.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "Proxy URL",
   "settings.proxyUrl.desc": "HTTP(S) proxy for corporate gateways (e.g. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const en = {
   "settings.apiProviderVerifyFailed": "Verification failed: {{error}}",
   "settings.apiProviderNameRequired": "Provider name is required",
   "settings.apiProviderApiKeyRequired": "API key is required",
+  "settings.azureProviderEndpointRequired": "Azure endpoint is required",
+  "settings.azureProviderApiVersionRequired": "API version is required",
+  "settings.azureProviderDeploymentsRequired": "At least one deployment name is required",
   "settings.apiProviderVerifyRequired": "Please verify connection first",
   "chat.noApiProvider": "No API provider configured. Please add and verify a provider in settings.",
 

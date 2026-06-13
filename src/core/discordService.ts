@@ -1293,6 +1293,7 @@ export class DiscordService {
           undefined,
           enableThinking,
           this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
+          providerConfig,
         );
 
     let fullResponse = "";

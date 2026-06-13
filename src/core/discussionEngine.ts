@@ -114,7 +114,7 @@ export async function* streamChatForModel(
         settings.proxyUrl, settings.proxyBypass,
       );
     } else {
-      // OpenAI, OpenRouter, Grok, custom - all OpenAI-compatible
+      // OpenAI, Azure OpenAI, OpenRouter, Grok, custom - all OpenAI-compatible
       const { openaiChatWithToolsStream } = await import("./openaiProvider");
       yield* openaiChatWithToolsStream(
         providerConfig.baseUrl,
@@ -127,6 +127,7 @@ export async function* streamChatForModel(
         signal,
         undefined,
         settings.proxyUrl, settings.proxyBypass,
+        providerConfig,
       );
     }
   } else if (isLocalLlmModel(model) && !Platform.isMobile) {

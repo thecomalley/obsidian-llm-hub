@@ -38,7 +38,7 @@ import {
 } from "src/core/editHistory";
 import { EditHistoryModal } from "src/ui/components/EditHistoryModal";
 import { formatError } from "src/utils/error";
-import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
+import { DEFAULT_AZURE_API_VERSION, DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { initDiscordService, resetDiscordService } from "src/core/discordService";
@@ -152,6 +152,10 @@ function normalizeModelList(models: unknown): string[] {
   return Array.from(new Set(models
     .filter((model): model is string => typeof model === "string")
     .map(normalizeDeprecatedGeminiModelName)));
+}
+
+function normalizeAzureEndpoint(endpoint: unknown): string {
+  return typeof endpoint === "string" ? endpoint.trim().replace(/\/+$/, "") : "";
 }
 
 export class LlmHubPlugin extends Plugin {
@@ -587,11 +591,30 @@ export class LlmHubPlugin extends Plugin {
         : [...DEFAULT_SETTINGS.slashCommands],
       // Deep copy API providers (ensure enabledModels exists)
       apiProviders: loaded.apiProviders
-        ? (loaded.apiProviders as Record<string, unknown>[]).map(p => ({
-            ...p,
-            enabledModels: normalizeModelList(p.enabledModels),
-            availableModels: normalizeModelList(p.availableModels),
-          }))
+        ? (loaded.apiProviders as Record<string, unknown>[]).map(p => {
+            const type = typeof p.type === "string" ? p.type : "custom";
+            const availableModels = normalizeModelList(p.availableModels);
+            const enabledModels = normalizeModelList(p.enabledModels);
+            const azureDeployments = normalizeModelList(
+              type === "azure"
+                ? (Array.isArray(p.azureDeployments) && p.azureDeployments.length > 0
+                    ? p.azureDeployments
+                    : (availableModels.length > 0 ? p.availableModels : p.enabledModels))
+                : p.azureDeployments
+            );
+            return {
+              ...p,
+              baseUrl: type === "azure" ? normalizeAzureEndpoint(p.baseUrl) : (typeof p.baseUrl === "string" ? p.baseUrl : ""),
+              azureApiVersion: type === "azure"
+                ? (typeof p.azureApiVersion === "string" && p.azureApiVersion.trim()
+                    ? p.azureApiVersion.trim()
+                    : DEFAULT_AZURE_API_VERSION)
+                : undefined,
+              azureDeployments,
+              enabledModels: type === "azure" && azureDeployments.length > 0 ? [...azureDeployments] : enabledModels,
+              availableModels: type === "azure" && azureDeployments.length > 0 ? [...azureDeployments] : availableModels,
+            };
+          })
         : [],
       // Deep copy MCP servers (add default transport for backward compatibility)
       mcpServers: loaded.mcpServers

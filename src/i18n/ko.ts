@@ -91,7 +91,7 @@ export const ko: Record<string, string> = {
 
   // Settings - API 제공자
   "settings.apiProviders": "API 제공자",
-  "settings.apiProviders.desc": "OpenAI 호환 API 제공자에 연결 (OpenAI, OpenRouter, Grok 등)",
+  "settings.apiProviders.desc": "API 제공자에 연결 (OpenAI, Azure OpenAI, OpenRouter, Grok 등)",
   "settings.apiProviderAdd": "제공자 추가",
   "settings.apiProviderEdit": "제공자 편집",
   "settings.apiProviderDelete": "제공자 삭제",
@@ -102,6 +102,14 @@ export const ko: Record<string, string> = {
   "settings.apiProviderName": "표시 이름",
   "settings.apiProviderBaseUrl": "기본 URL",
   "settings.apiProviderApiKey": "API 키",
+  "settings.azureProviderEndpoint": "Azure 엔드포인트",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Azure API 키",
+  "settings.azureProviderApiVersion": "API 버전",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "배포",
+  "settings.azureProviderDeployments.desc": "한 줄에 하나씩 배포 이름을 입력하세요. 확인 후 구성된 모든 배포가 선택 가능한 모델이 됩니다.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "프록시",
   "settings.proxyUrl": "프록시 URL",
   "settings.proxyUrl.desc": "기업 게이트웨이용 HTTP(S) 프록시 (예: http://proxy:8080)",
@@ -116,6 +124,9 @@ export const ko: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "확인 실패: {{error}}",
   "settings.apiProviderNameRequired": "제공자 이름은 필수입니다",
   "settings.apiProviderApiKeyRequired": "API 키는 필수입니다",
+  "settings.azureProviderEndpointRequired": "Azure 엔드포인트는 필수입니다",
+  "settings.azureProviderApiVersionRequired": "API 버전은 필수입니다",
+  "settings.azureProviderDeploymentsRequired": "최소 하나의 배포 이름이 필요합니다",
   "settings.apiProviderVerifyRequired": "먼저 연결을 확인해 주세요",
   "chat.noApiProvider": "API 제공자가 설정되지 않았습니다. 설정에서 제공자를 추가하고 확인하세요.",
 

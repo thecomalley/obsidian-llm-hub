@@ -482,6 +482,7 @@ Please revise the output based on the user's feedback above.`;
               apiSystemPrompt, apiToolExecutor,
               undefined, undefined,
               plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+              providerConfig,
             );
         for await (const chunk of streamFn) {
           if (chunk.type === "text") {

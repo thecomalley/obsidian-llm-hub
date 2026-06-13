@@ -91,7 +91,7 @@ export const es: Record<string, string> = {
 
   // Settings - API Providers
   "settings.apiProviders": "Proveedores de API",
-  "settings.apiProviders.desc": "Conectar con proveedores de API compatibles con OpenAI (OpenAI, OpenRouter, Grok, etc.)",
+  "settings.apiProviders.desc": "Conectar con proveedores de API (OpenAI, Azure OpenAI, OpenRouter, Grok, etc.)",
   "settings.apiProviderAdd": "Agregar proveedor",
   "settings.apiProviderEdit": "Editar proveedor",
   "settings.apiProviderDelete": "Eliminar proveedor",
@@ -102,6 +102,14 @@ export const es: Record<string, string> = {
   "settings.apiProviderName": "Nombre de visualización",
   "settings.apiProviderBaseUrl": "URL base",
   "settings.apiProviderApiKey": "Clave API",
+  "settings.azureProviderEndpoint": "Endpoint de Azure",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Clave API de Azure",
+  "settings.azureProviderApiVersion": "Versión de API",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Implementaciones",
+  "settings.azureProviderDeployments.desc": "Introduce un nombre de implementación por línea. Tras la verificación, todas las implementaciones configuradas estarán disponibles como modelos seleccionables.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "URL del proxy",
   "settings.proxyUrl.desc": "Proxy HTTP(S) para gateways corporativos (ej. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const es: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "Verificación fallida: {{error}}",
   "settings.apiProviderNameRequired": "El nombre del proveedor es obligatorio",
   "settings.apiProviderApiKeyRequired": "La clave API es obligatoria",
+  "settings.azureProviderEndpointRequired": "El endpoint de Azure es obligatorio",
+  "settings.azureProviderApiVersionRequired": "La versión de API es obligatoria",
+  "settings.azureProviderDeploymentsRequired": "Se requiere al menos un nombre de implementación",
   "settings.apiProviderVerifyRequired": "Por favor, verifique la conexión primero",
   "chat.noApiProvider": "No hay proveedor de API configurado. Agrega y verifica un proveedor en la configuración.",
 

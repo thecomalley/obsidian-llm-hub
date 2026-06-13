@@ -91,7 +91,7 @@ export const ja: Record<string, string> = {
 
   // Settings - API Providers
   "settings.apiProviders": "APIプロバイダー",
-  "settings.apiProviders.desc": "OpenAI互換APIプロバイダーに接続（OpenAI、OpenRouter、Grokなど）",
+  "settings.apiProviders.desc": "APIプロバイダーに接続（OpenAI、Azure OpenAI、OpenRouter、Grokなど）",
   "settings.apiProviderAdd": "プロバイダーを追加",
   "settings.apiProviderEdit": "プロバイダーを編集",
   "settings.apiProviderDelete": "プロバイダーを削除",
@@ -102,6 +102,14 @@ export const ja: Record<string, string> = {
   "settings.apiProviderName": "表示名",
   "settings.apiProviderBaseUrl": "ベースURL",
   "settings.apiProviderApiKey": "APIキー",
+  "settings.azureProviderEndpoint": "Azure エンドポイント",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Azure APIキー",
+  "settings.azureProviderApiVersion": "APIバージョン",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "デプロイメント",
+  "settings.azureProviderDeployments.desc": "1行に1つずつデプロイメント名を入力してください。確認後、すべてのデプロイメントが選択可能なモデルになります。",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "プロキシ",
   "settings.proxyUrl": "プロキシURL",
   "settings.proxyUrl.desc": "企業ゲートウェイ用HTTP(S)プロキシ（例：http://proxy:8080）",
@@ -116,6 +124,9 @@ export const ja: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "確認失敗：{{error}}",
   "settings.apiProviderNameRequired": "プロバイダー名は必須です",
   "settings.apiProviderApiKeyRequired": "APIキーは必須です",
+  "settings.azureProviderEndpointRequired": "Azure エンドポイントは必須です",
+  "settings.azureProviderApiVersionRequired": "APIバージョンは必須です",
+  "settings.azureProviderDeploymentsRequired": "少なくとも1つのデプロイメント名が必要です",
   "settings.apiProviderVerifyRequired": "先に接続を確認してください",
   "chat.noApiProvider": "APIプロバイダーが設定されていません。設定でプロバイダーを追加して確認してください。",
 

@@ -2415,6 +2415,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
 						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+						providerConfig,
 					);
 
 			for await (const chunk of streamFn) {

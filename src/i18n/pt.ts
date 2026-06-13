@@ -91,7 +91,7 @@ export const pt: Record<string, string> = {
 
   // Settings - Provedores de API
   "settings.apiProviders": "Provedores de API",
-  "settings.apiProviders.desc": "Conectar a provedores de API compativeis com OpenAI (OpenAI, OpenRouter, Grok, etc.)",
+  "settings.apiProviders.desc": "Conectar a provedores de API (OpenAI, Azure OpenAI, OpenRouter, Grok, etc.)",
   "settings.apiProviderAdd": "Adicionar provedor",
   "settings.apiProviderEdit": "Editar provedor",
   "settings.apiProviderDelete": "Excluir provedor",
@@ -102,6 +102,14 @@ export const pt: Record<string, string> = {
   "settings.apiProviderName": "Nome de exibicao",
   "settings.apiProviderBaseUrl": "URL base",
   "settings.apiProviderApiKey": "Chave API",
+  "settings.azureProviderEndpoint": "Endpoint do Azure",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Chave API do Azure",
+  "settings.azureProviderApiVersion": "Versao da API",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Implantacoes",
+  "settings.azureProviderDeployments.desc": "Digite um nome de implantacao por linha. Apos a verificacao, todas as implantacoes configuradas se tornam modelos selecionaveis.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "URL do proxy",
   "settings.proxyUrl.desc": "Proxy HTTP(S) para gateways corporativos (ex. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const pt: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "Verificacao falhou: {{error}}",
   "settings.apiProviderNameRequired": "O nome do provedor e obrigatorio",
   "settings.apiProviderApiKeyRequired": "A chave API e obrigatoria",
+  "settings.azureProviderEndpointRequired": "O endpoint do Azure e obrigatorio",
+  "settings.azureProviderApiVersionRequired": "A versao da API e obrigatoria",
+  "settings.azureProviderDeploymentsRequired": "Pelo menos um nome de implantacao e obrigatorio",
   "settings.apiProviderVerifyRequired": "Por favor, verifique a conexao primeiro",
   "chat.noApiProvider": "Nenhum provedor de API configurado. Adicione e verifique um provedor nas configuracoes.",
 

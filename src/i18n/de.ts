@@ -91,7 +91,7 @@ export const de: Record<string, string> = {
 
   // Settings - API-Anbieter
   "settings.apiProviders": "API-Anbieter",
-  "settings.apiProviders.desc": "Verbindung zu OpenAI-kompatiblen API-Anbietern herstellen (OpenAI, OpenRouter, Grok usw.)",
+  "settings.apiProviders.desc": "Verbindung zu API-Anbietern herstellen (OpenAI, Azure OpenAI, OpenRouter, Grok usw.)",
   "settings.apiProviderAdd": "Anbieter hinzufügen",
   "settings.apiProviderEdit": "Anbieter bearbeiten",
   "settings.apiProviderDelete": "Anbieter löschen",
@@ -102,6 +102,14 @@ export const de: Record<string, string> = {
   "settings.apiProviderName": "Anzeigename",
   "settings.apiProviderBaseUrl": "Basis-URL",
   "settings.apiProviderApiKey": "API-Schlüssel",
+  "settings.azureProviderEndpoint": "Azure-Endpunkt",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Azure-API-Schlüssel",
+  "settings.azureProviderApiVersion": "API-Version",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "Deployments",
+  "settings.azureProviderDeployments.desc": "Geben Sie pro Zeile einen Deployment-Namen ein. Nach der Überprüfung werden alle konfigurierten Deployments als auswählbare Modelle angezeigt.",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "Proxy-URL",
   "settings.proxyUrl.desc": "HTTP(S)-Proxy für Unternehmens-Gateways (z.B. http://proxy:8080)",
@@ -116,6 +124,9 @@ export const de: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "Überprüfung fehlgeschlagen: {{error}}",
   "settings.apiProviderNameRequired": "Anbietername ist erforderlich",
   "settings.apiProviderApiKeyRequired": "API-Schlüssel ist erforderlich",
+  "settings.azureProviderEndpointRequired": "Azure-Endpunkt ist erforderlich",
+  "settings.azureProviderApiVersionRequired": "API-Version ist erforderlich",
+  "settings.azureProviderDeploymentsRequired": "Mindestens ein Deployment-Name ist erforderlich",
   "settings.apiProviderVerifyRequired": "Bitte überprüfen Sie zuerst die Verbindung",
   "chat.noApiProvider": "Kein API-Anbieter konfiguriert. Bitte fügen Sie einen Anbieter in den Einstellungen hinzu und überprüfen Sie ihn.",
 

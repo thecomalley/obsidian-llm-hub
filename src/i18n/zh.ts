@@ -91,7 +91,7 @@ export const zh: Record<string, string> = {
 
   // Settings - API 提供商
   "settings.apiProviders": "API 提供商",
-  "settings.apiProviders.desc": "连接到 OpenAI 兼容的 API 提供商（OpenAI、OpenRouter、Grok 等）",
+  "settings.apiProviders.desc": "连接到 API 提供商（OpenAI、Azure OpenAI、OpenRouter、Grok 等）",
   "settings.apiProviderAdd": "添加提供商",
   "settings.apiProviderEdit": "编辑提供商",
   "settings.apiProviderDelete": "删除提供商",
@@ -102,6 +102,14 @@ export const zh: Record<string, string> = {
   "settings.apiProviderName": "显示名称",
   "settings.apiProviderBaseUrl": "基础 URL",
   "settings.apiProviderApiKey": "API 密钥",
+  "settings.azureProviderEndpoint": "Azure 终结点",
+  "settings.azureProviderEndpoint.placeholder": "https://your-resource.openai.azure.com",
+  "settings.azureProviderApiKey": "Azure API 密钥",
+  "settings.azureProviderApiVersion": "API 版本",
+  "settings.azureProviderApiVersion.placeholder": "2024-10-21",
+  "settings.azureProviderDeployments": "部署",
+  "settings.azureProviderDeployments.desc": "每行输入一个部署名称。验证后，所有已配置的部署都会成为可选模型。",
+  "settings.azureProviderDeployments.placeholder": "gpt-4.1\ntext-embedding-3-large",
   "settings.proxy": "代理",
   "settings.proxyUrl": "代理 URL",
   "settings.proxyUrl.desc": "企业网关的 HTTP(S) 代理（例如 http://proxy:8080）",
@@ -116,6 +124,9 @@ export const zh: Record<string, string> = {
   "settings.apiProviderVerifyFailed": "验证失败：{{error}}",
   "settings.apiProviderNameRequired": "提供商名称为必填项",
   "settings.apiProviderApiKeyRequired": "API 密钥为必填项",
+  "settings.azureProviderEndpointRequired": "Azure 终结点为必填项",
+  "settings.azureProviderApiVersionRequired": "API 版本为必填项",
+  "settings.azureProviderDeploymentsRequired": "至少需要一个部署名称",
   "settings.apiProviderVerifyRequired": "请先验证连接",
   "chat.noApiProvider": "未配置 API 提供商。请在设置中添加并验证提供商。",
 

@@ -1576,7 +1576,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
     }
 
     if (providerConfig) {
-      // OpenAI-compatible providers (OpenRouter, Grok, custom, openai)
+      // OpenAI-compatible providers (OpenAI, Azure OpenAI, OpenRouter, Grok, custom)
       const noopToolExecutor = () => Promise.resolve({});
       yield* openaiChatWithToolsStream(
         providerConfig.baseUrl, providerConfig.apiKey,
@@ -1584,6 +1584,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
         systemPrompt, noopToolExecutor, abortController.signal,
         true,
         this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
+        providerConfig,
       );
       return;
     }

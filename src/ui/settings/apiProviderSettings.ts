@@ -1,12 +1,27 @@
 import { Setting, Notice, Modal, App, Platform } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
-import { KNOWN_PROVIDER_DEFAULTS } from "src/types";
-import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
+import { DEFAULT_AZURE_API_VERSION, KNOWN_PROVIDER_DEFAULTS } from "src/types";
+import { verifyApiProvider, verifyAzureOpenAiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
 import { getKnownModels, OPENCODE_GO_FALLBACK_MODELS } from "src/core/modelPricing";
 import type { SettingsContext } from "./settingsContext";
+
+function normalizeAzureDeployments(value: string | string[] | undefined): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : (value ?? "").split(/\r?\n/);
+  return Array.from(new Set(items.map(item => item.trim()).filter(Boolean)));
+}
+
+function deploymentsToText(deployments: string[] | undefined): string {
+  return (deployments ?? []).join("\n");
+}
+
+function isAzureProvider(config: Pick<ApiProviderConfig, "type">): boolean {
+  return config.type === "azure";
+}
 
 export function displayApiProviderSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   if (Platform.isMobile) return;
@@ -19,13 +34,15 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
   new Setting(containerEl)
     .setDesc(t("settings.apiProviders.desc"));
 
-  // List existing providers
   for (const provider of plugin.settings.apiProviders) {
     const modelInfo = provider.enabledModels.length > 0 ? ` (${provider.enabledModels.join(", ")})` : "";
     const isKnown = !!KNOWN_PROVIDER_DEFAULTS[provider.type];
+    const providerDesc = provider.type === "azure"
+      ? provider.baseUrl
+      : (isKnown ? "" : provider.baseUrl);
     const providerSetting = new Setting(containerEl)
       .setName(`${provider.name}${modelInfo}`)
-      .setDesc(isKnown ? "" : provider.baseUrl);
+      .setDesc(providerDesc);
 
     const statusEl = providerSetting.controlEl.createDiv({ cls: "llm-hub-cli-row-status" });
     if (provider.verified && provider.enabled) {
@@ -35,7 +52,6 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
       statusEl.textContent = t("settings.apiProviderDisabled");
     }
 
-    // Toggle enable/disable
     providerSetting.addToggle((toggle) =>
       toggle
         .setValue(provider.enabled)
@@ -46,7 +62,6 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
         })
     );
 
-    // Edit button
     providerSetting.addExtraButton((button) =>
       button
         .setIcon("settings")
@@ -63,7 +78,6 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
         })
     );
 
-    // Delete button
     providerSetting.addExtraButton((button) =>
       button
         .setIcon("trash")
@@ -76,7 +90,6 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
     );
   }
 
-  // Add new provider button
   new Setting(containerEl)
     .addButton((btn) =>
       btn
@@ -115,19 +128,49 @@ class ApiProviderModal extends Modal {
     this.onSave = onSave;
     this.proxyUrl = proxyUrl;
     this.proxyBypass = proxyBypass;
+    this.normalizeAzureFields();
+  }
+
+  private invalidateVerification(): void {
+    this.config.verified = false;
+  }
+
+  private normalizeAzureFields(): void {
+    if (!isAzureProvider(this.config)) return;
+    this.config.name = KNOWN_PROVIDER_DEFAULTS.azure.displayName;
+    this.config.baseUrl = this.config.baseUrl.trim().replace(/\/+$/, "");
+    this.config.azureApiVersion = this.config.azureApiVersion?.trim() || DEFAULT_AZURE_API_VERSION;
+    const deployments = normalizeAzureDeployments(
+      this.config.azureDeployments && this.config.azureDeployments.length > 0
+        ? this.config.azureDeployments
+        : (this.config.availableModels.length > 0 ? this.config.availableModels : this.config.enabledModels)
+    );
+    this.config.azureDeployments = deployments;
+    this.config.availableModels = [...deployments];
+    this.config.enabledModels = [...deployments];
+  }
+
+  private setAzureDeployments(value: string): void {
+    const deployments = normalizeAzureDeployments(value);
+    this.config.azureDeployments = deployments;
+    this.config.availableModels = [...deployments];
+    this.config.enabledModels = [...deployments];
+    this.invalidateVerification();
   }
 
   onOpen() {
     const { contentEl } = this;
+    const isAzure = isAzureProvider(this.config);
+
     contentEl.empty();
     contentEl.createEl("h3", { text: t("settings.apiProviderConfigure") });
 
-    // Provider type
     new Setting(contentEl)
       .setName(t("settings.apiProviderType"))
       .addDropdown((dropdown) => {
         dropdown.addOption("gemini", "Gemini");
         dropdown.addOption("openai", "OpenAI");
+        dropdown.addOption("azure", "Azure OpenAI");
         dropdown.addOption("anthropic", "Anthropic");
         dropdown.addOption("openrouter", "OpenRouter");
         dropdown.addOption("grok", "Grok");
@@ -137,109 +180,173 @@ class ApiProviderModal extends Modal {
         dropdown.setValue(this.config.type);
         dropdown.onChange((value) => {
           this.config.type = value as ApiProviderType;
+          this.invalidateVerification();
+
           const defaults = KNOWN_PROVIDER_DEFAULTS[value];
-          if (defaults) {
+          if (value === "azure") {
+            this.config.name = KNOWN_PROVIDER_DEFAULTS.azure.displayName;
+            this.config.baseUrl = "";
+            this.config.azureApiVersion = DEFAULT_AZURE_API_VERSION;
+            this.config.azureDeployments = [];
+            this.config.availableModels = [];
+            this.config.enabledModels = [];
+          } else if (defaults) {
             this.config.baseUrl = defaults.baseUrl;
             this.config.name = defaults.displayName;
+            this.config.availableModels = [];
+            this.config.enabledModels = [];
+            this.config.azureApiVersion = undefined;
+            this.config.azureDeployments = undefined;
+          } else {
+            this.config.name = this.config.name === KNOWN_PROVIDER_DEFAULTS.azure.displayName ? "" : this.config.name;
+            this.config.baseUrl = "";
+            this.config.availableModels = [];
+            this.config.enabledModels = [];
+            this.config.azureApiVersion = undefined;
+            this.config.azureDeployments = undefined;
           }
-          this.onOpen(); // Re-render
+
+          this.onOpen();
         });
       });
 
-    // Name (editable only for custom providers)
     const isKnownProvider = !!KNOWN_PROVIDER_DEFAULTS[this.config.type];
     if (isKnownProvider) {
-      // Force name and baseUrl from defaults
       this.config.name = KNOWN_PROVIDER_DEFAULTS[this.config.type].displayName;
-      this.config.baseUrl = KNOWN_PROVIDER_DEFAULTS[this.config.type].baseUrl;
+      if (!isAzure) {
+        this.config.baseUrl = KNOWN_PROVIDER_DEFAULTS[this.config.type].baseUrl;
+      }
     } else {
-      // Name (editable only for custom/unknown providers)
       new Setting(contentEl)
         .setName(t("settings.apiProviderName"))
         .addText((text) =>
           text
             .setPlaceholder("My Provider")
             .setValue(this.config.name)
-            .onChange((value) => { this.config.name = value.trim(); })
+            .onChange((value) => {
+              this.config.name = value.trim();
+            })
         );
 
-      // Base URL (editable only for custom/unknown providers)
       new Setting(contentEl)
         .setName(t("settings.apiProviderBaseUrl"))
         .addText((text) =>
           text
             .setPlaceholder("https://api.openai.com")
             .setValue(this.config.baseUrl)
-            .onChange((value) => { this.config.baseUrl = value.trim(); })
+            .onChange((value) => {
+              this.config.baseUrl = value.trim();
+              this.invalidateVerification();
+            })
         );
     }
 
-    // API Key
+    if (isAzure) {
+      new Setting(contentEl)
+        .setName(t("settings.azureProviderEndpoint"))
+        .addText((text) =>
+          text
+            .setPlaceholder(t("settings.azureProviderEndpoint.placeholder"))
+            .setValue(this.config.baseUrl)
+            .onChange((value) => {
+              this.config.baseUrl = value.trim().replace(/\/+$/, "");
+              this.invalidateVerification();
+            })
+        );
+    }
+
     new Setting(contentEl)
-      .setName(t("settings.apiProviderApiKey"))
+      .setName(isAzure ? t("settings.azureProviderApiKey") : t("settings.apiProviderApiKey"))
       .addText((text) => {
         text
           .setPlaceholder(t("settings.googleApiKey.placeholder"))
           .setValue(this.config.apiKey)
-          .onChange((value) => { this.config.apiKey = value.trim(); });
+          .onChange((value) => {
+            this.config.apiKey = value.trim();
+            this.invalidateVerification();
+          });
         text.inputEl.type = "password";
       });
 
-    // Model selection — checkboxes for enabling/disabling models
-    const knownModels = getKnownModels(this.config.type);
-    const fetchedModels = this.config.availableModels;
-    // Merge: known models first, then any fetched models not in known list
-    const modelChoices = knownModels.length > 0
-      ? [...knownModels, ...fetchedModels.filter(m => !knownModels.includes(m))]
-      : fetchedModels;
-
-    if (modelChoices.length > 0) {
-      const modelSetting = new Setting(contentEl)
-        .setName(t("settings.apiProviderModel"))
-        .setDesc(t("settings.apiProviderModel.desc"));
-
-      // Search filter (show when many models)
-      const items: HTMLElement[] = [];
-      if (modelChoices.length > 20) {
-        const filterInput = modelSetting.controlEl.createEl("input", {
-          type: "text",
-          placeholder: t("settings.apiProviderModelFilter"),
-          cls: "llm-hub-model-filter",
-        });
-        filterInput.addEventListener("input", () => {
-          const query = filterInput.value.toLowerCase();
-          for (const item of items) {
-            const name = item.textContent?.toLowerCase() ?? "";
-            item.toggleClass("llm-hub-hidden", !name.includes(query));
-          }
-        });
-      }
-
-      const listEl = modelSetting.controlEl.createDiv({ cls: "llm-hub-model-checklist" });
-      for (const m of modelChoices) {
-        const label = listEl.createEl("label", { cls: "llm-hub-model-check-item" });
-        const cb = label.createEl("input", { type: "checkbox" });
-        cb.checked = this.config.enabledModels.includes(m);
-        cb.addEventListener("change", () => {
-          if (cb.checked) {
-            if (!this.config.enabledModels.includes(m)) {
-              this.config.enabledModels.push(m);
-            }
-          } else {
-            this.config.enabledModels = this.config.enabledModels.filter(x => x !== m);
-          }
-        });
-        label.createSpan({ text: m });
-        items.push(label);
-      }
-    } else if (!this.config.verified) {
-      // Not yet verified — show hint
+    if (isAzure) {
       new Setting(contentEl)
-        .setName(t("settings.apiProviderModel"))
-        .setDesc(t("settings.apiProviderVerifyRequired"));
+        .setName(t("settings.azureProviderApiVersion"))
+        .addText((text) =>
+          text
+            .setPlaceholder(t("settings.azureProviderApiVersion.placeholder"))
+            .setValue(this.config.azureApiVersion || DEFAULT_AZURE_API_VERSION)
+            .onChange((value) => {
+              this.config.azureApiVersion = value.trim();
+              this.invalidateVerification();
+            })
+        );
+
+      const deploymentsSetting = new Setting(contentEl)
+        .setName(t("settings.azureProviderDeployments"))
+        .setDesc(t("settings.azureProviderDeployments.desc"));
+      deploymentsSetting.settingEl.addClass("llm-hub-settings-textarea-container");
+      deploymentsSetting.addTextArea((text) => {
+        text
+          .setPlaceholder(t("settings.azureProviderDeployments.placeholder"))
+          .setValue(deploymentsToText(this.config.azureDeployments))
+          .onChange((value) => {
+            this.setAzureDeployments(value);
+          });
+        text.inputEl.rows = 4;
+        text.inputEl.addClass("llm-hub-settings-textarea");
+      });
+    } else {
+      const knownModels = getKnownModels(this.config.type);
+      const fetchedModels = this.config.availableModels;
+      const modelChoices = knownModels.length > 0
+        ? [...knownModels, ...fetchedModels.filter(m => !knownModels.includes(m))]
+        : fetchedModels;
+
+      if (modelChoices.length > 0) {
+        const modelSetting = new Setting(contentEl)
+          .setName(t("settings.apiProviderModel"))
+          .setDesc(t("settings.apiProviderModel.desc"));
+
+        const items: HTMLElement[] = [];
+        if (modelChoices.length > 20) {
+          const filterInput = modelSetting.controlEl.createEl("input", {
+            type: "text",
+            placeholder: t("settings.apiProviderModelFilter"),
+            cls: "llm-hub-model-filter",
+          });
+          filterInput.addEventListener("input", () => {
+            const query = filterInput.value.toLowerCase();
+            for (const item of items) {
+              const name = item.textContent?.toLowerCase() ?? "";
+              item.toggleClass("llm-hub-hidden", !name.includes(query));
+            }
+          });
+        }
+
+        const listEl = modelSetting.controlEl.createDiv({ cls: "llm-hub-model-checklist" });
+        for (const m of modelChoices) {
+          const label = listEl.createEl("label", { cls: "llm-hub-model-check-item" });
+          const cb = label.createEl("input", { type: "checkbox" });
+          cb.checked = this.config.enabledModels.includes(m);
+          cb.addEventListener("change", () => {
+            if (cb.checked) {
+              if (!this.config.enabledModels.includes(m)) {
+                this.config.enabledModels.push(m);
+              }
+            } else {
+              this.config.enabledModels = this.config.enabledModels.filter(x => x !== m);
+            }
+          });
+          label.createSpan({ text: m });
+          items.push(label);
+        }
+      } else if (!this.config.verified) {
+        new Setting(contentEl)
+          .setName(t("settings.apiProviderModel"))
+          .setDesc(t("settings.apiProviderVerifyRequired"));
+      }
     }
 
-    // Buttons: Verify + Save
     const buttonSetting = new Setting(contentEl);
 
     buttonSetting.addButton((btn) =>
@@ -249,13 +356,17 @@ class ApiProviderModal extends Modal {
           btn.setDisabled(true);
           btn.setButtonText(t("settings.cliVerifying"));
           try {
-            // OpenCode Go has no `/v1/models`, so it uses a dedicated
-            // reachability probe on `/v1/chat/completions`. Any HTTP
-            // response (even 401/404) means the URL is live; DNS /
-            // connection errors fail verify so a typo'd baseUrl or missing
-            // API key surface here instead of at chat time. See issue #37.
             let result: { success: boolean; error?: string; models?: string[] };
-            if (this.config.type === "opencodego") {
+            if (isAzureProvider(this.config)) {
+              result = await verifyAzureOpenAiProvider(
+                this.config.baseUrl,
+                this.config.apiKey,
+                this.config.azureApiVersion || DEFAULT_AZURE_API_VERSION,
+                this.config.azureDeployments ?? [],
+                this.proxyUrl,
+                this.proxyBypass,
+              );
+            } else if (this.config.type === "opencodego") {
               const probe = await verifyOpencodeGo(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
               result = probe.success
                 ? { success: true, models: OPENCODE_GO_FALLBACK_MODELS }
@@ -267,11 +378,17 @@ class ApiProviderModal extends Modal {
             } else {
               result = await verifyApiProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
             }
+
             if (result.success) {
               this.config.verified = true;
-              this.config.availableModels = result.models || [];
+              const models = result.models || [];
+              this.config.availableModels = models;
+              if (isAzureProvider(this.config)) {
+                this.config.azureDeployments = [...models];
+                this.config.enabledModels = [...models];
+              }
               new Notice(t("settings.apiProviderVerified", { count: String(this.config.availableModels.length) }));
-              this.onOpen(); // Re-render with models
+              this.onOpen();
             } else {
               new Notice(t("settings.apiProviderVerifyFailed", { error: result.error || "Unknown error" }));
             }
@@ -293,8 +410,20 @@ class ApiProviderModal extends Modal {
             new Notice(t("settings.apiProviderNameRequired"));
             return;
           }
+          if (isAzureProvider(this.config) && !this.config.baseUrl) {
+            new Notice(t("settings.azureProviderEndpointRequired"));
+            return;
+          }
           if (!this.config.apiKey) {
             new Notice(t("settings.apiProviderApiKeyRequired"));
+            return;
+          }
+          if (isAzureProvider(this.config) && !(this.config.azureApiVersion?.trim())) {
+            new Notice(t("settings.azureProviderApiVersionRequired"));
+            return;
+          }
+          if (isAzureProvider(this.config) && (this.config.azureDeployments?.length ?? 0) === 0) {
+            new Notice(t("settings.azureProviderDeploymentsRequired"));
             return;
           }
           if (!this.config.verified) {
